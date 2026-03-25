@@ -22,8 +22,8 @@ class HrOvertimeEntry(models.Model):
     reference = fields.Char(tracking=True)
 
     state = fields.Selection([
-        ("draft", "Draft"),
-        ("done", "Confirmed")
+        ("draft", "Borrador"),
+        ("done", "Confirmado")
     ], default="draft", tracking=True)
 
     description = fields.Char("Descripción", tracking=True)

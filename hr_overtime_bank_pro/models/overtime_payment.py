@@ -10,8 +10,8 @@ class HrOvertimePayment(models.Model):
     hours = fields.Float(required=True)
 
     state = fields.Selection([
-        ("draft", "Draft"),
-        ("done", "Confirmed")
+        ("draft", "Borrador"),
+        ("done", "Confirmado")
     ], default="draft")
 
     description = fields.Char("Description")

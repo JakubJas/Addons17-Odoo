@@ -11,16 +11,23 @@
                 <page string="Overtime Bank" groups="hr_overtime_bank_pro.group_overtime_hr, hr_overtime_bank_pro.group_overtime_admin">
 
                     <group>
+                        <button name="%(action_overtime_entries)d"
+                            type="action"
+                            string="Nuevo"
+                            class="btn-primary"/>
+                    </group>
+                    
+                    <group>                        
                         <field name="overtime_balance" widget="float_time"/>
                     </group>
 
                     <field name="overtime_entry_ids" groups="hr_overtime_bank_pro.group_overtime_hr, hr_overtime_bank_pro.group_overtime_admin">
                         <tree>
-                            <field name="date"/>
-                            <field name="type"/>
-                            <field name="hours"/>
-                            <field name="reference"/>
-                            <field name="state"/>
+                            <field name="date" string="Fecha"/>
+                            <field name="type" string="Tipo"/>
+                            <field name="hours" string="Horas"/>
+                            <field name="reference" string="Referencia"/>
+                            <field name="state" string="Estado"/>
                         </tree>
                     </field>
 

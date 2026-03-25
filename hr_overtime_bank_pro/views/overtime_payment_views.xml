@@ -20,12 +20,12 @@
             <form string="Overtime Payment">
                 <header>
                     <button name="action_confirm"
-                            string="Confirm"
+                            string="Confirmar"
                             type="object"
                             class="oe_highlight"
                             invisible="state != 'draft'"/>
                     <button name="action_set_to_draft"
-                            string="Set to Draft"
+                            string="Volver a Borrador"
                             type="object"
                             invisible="state != 'done'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
