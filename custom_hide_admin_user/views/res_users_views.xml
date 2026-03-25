@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Sobrescribimos la acción existente -->
+    <record id="base.action_res_users" model="ir.actions.act_window">
+        <field name="domain">[('id', '!=', 2)]</field>
+    </record>
+
+</odoo>

@@ -10,6 +10,8 @@
 
                 <page string="Overtime Bank" groups="hr_overtime_bank_pro.group_overtime_hr, hr_overtime_bank_pro.group_overtime_admin">
 
+                    <!-- Hay que ajustar el botón para que genere el pop up y no que te envie al over time. Tambien tiene que pasar
+                    al usuario que se va a crear le el registro -->
                     <group>
                         <button name="%(action_overtime_entries)d"
                             type="action"
