@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_serviflow_budget_validation_user,serviflow.budget.validation,model_serviflow_budget_validation,base.group_user,1,1,1,0
+access_sb_hr_serviflow_option_user,sb.hr.serviflow.option user,model_sb_hr_serviflow_option,base.group_user,1,1,1,1

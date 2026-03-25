@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="mail_activity_type_budget_work" model="mail.activity.type">
+        <field name="name">Serviflow - Elaborar PPTO</field>
+        <field name="category">default</field>
+    </record>
+
+    <record id="mail_activity_type_budget_review" model="mail.activity.type">
+        <field name="name">Serviflow - Revisar PPTO</field>
+        <field name="category">default</field>
+    </record>
+
+    <record id="mail_activity_type_budget_fix" model="mail.activity.type">
+        <field name="name">Serviflow - Corregir PPTO</field>
+        <field name="category">default</field>
+    </record>
+</odoo>

@@ -1,0 +1,106 @@
+<odoo>
+
+    <record id="view_hr_overtime_entry_tree" model="ir.ui.view">
+        <field name="name">hr.overtime.entry.tree</field>
+        <field name="model">hr.overtime.entry</field>
+        <field name="arch" type="xml">
+            <tree string="Overtime Entries">
+                <header>
+                    <button name="%(action_overtime_export_wizard)d"
+                            type="action"
+                            string="Exportar CSV"
+                            class="btn-primary"/>
+                </header>
+                <field name="employee_id"/>
+                <field name="date"/>
+                <field name="type"/>
+                <field name="hours"/>
+                <field name="state"/>
+                <field name="description"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_hr_overtime_entry_form" model="ir.ui.view">
+        <field name="name">hr.overtime.entry.form</field>
+        <field name="model">hr.overtime.entry</field>
+        <field name="arch" type="xml">
+            <form string="Overtime Entry">
+                <header>
+                    <button name="action_confirm"
+                            string="Confirm"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state != 'draft'"/>
+                    <button name="action_set_to_draft"
+                            string="Set to Draft"
+                            type="object"
+                            invisible="state != 'done' or attendance_id"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                </header>
+                <sheet>
+                    <group>
+                        <field name="employee_id" readonly="state == 'done'"/>
+                        <field name="date" readonly="state == 'done'"/>
+                        <field name="hours" readonly="state == 'done'"/>
+                        <field name="type" readonly="state == 'done'"/>
+                        <field name="attendance_id" invisible="1"/>
+                        <field name="leave_allocation_id" invisible="1"/>
+                    </group>
+
+                    <group>
+                        <field name="reference" readonly="state == 'done'"/>
+                        <field name="description" readonly="state == 'done'"/>
+                    </group>
+
+                    <group string="Attachment">
+                        <field name="attachment" filename="attachment_filename" readonly="state == 'done'"/>
+                        <field name="attachment_filename" invisible="1"/>
+                    </group>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_hr_overtime_entry_search" model="ir.ui.view">
+        <field name="name">hr.overtime.entry.search</field>
+        <field name="model">hr.overtime.entry</field>
+        <field name="arch" type="xml">
+            <search string="Search Overtime">
+                <field name="employee_id"/>
+                <field name="date"/>
+
+                <filter name="approved"
+                        string="Approved"
+                        domain="[('state','=','done')]"/>
+
+                <filter name="pending"
+                        string="Pending"
+                        domain="[('state','=','draft')]"/>
+
+                <group expand="0" string="Group By">
+                    <filter name="group_employee"
+                            string="Employee"
+                            context="{'group_by':'employee_id'}"/>
+
+                    <filter name="group_date"
+                            string="Date"
+                            context="{'group_by':'date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_overtime_entries" model="ir.actions.act_window">
+        <field name="name">Overtime Entries</field>
+        <field name="res_model">hr.overtime.entry</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_hr_overtime_entry_search"/>
+    </record>
+
+</odoo>

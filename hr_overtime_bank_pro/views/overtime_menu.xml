@@ -1,0 +1,15 @@
+<odoo>
+
+    <menuitem id="menu_overtime_root" name="Overtime" sequence="10" web_icon="SB-Addons17,hr_overtime_bank_pro/static/description/icon.png"/>
+
+    <menuitem id="menu_overtime_entries"
+              name="Overtime Entries"
+              parent="menu_overtime_root"
+              action="action_overtime_entries"/>
+
+    <menuitem id="menu_overtime_payments"
+              name="Overtime Payments"
+              parent="menu_overtime_root"
+              action="action_overtime_payments"/>
+
+</odoo>

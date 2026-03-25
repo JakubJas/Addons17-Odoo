@@ -1,0 +1,220 @@
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2 class="oe_slogan">Overtime Bank Pro</h2>
+        <h3 class="oe_slogan">Gestión avanzada de horas extra, pagos y compensaciones en vacaciones</h3>
+
+        <p>
+            <strong>Overtime Bank Pro</strong> es un módulo diseñado para gestionar de forma eficiente
+            las horas extra de los empleados dentro de Odoo.
+            Permite centralizar el control de horas adicionales generadas desde asistencia
+            (<em>hr.attendance</em>), así como su posterior compensación o pago, manteniendo
+            un sistema coherente y sincronizado con el módulo de ausencias (<em>hr_holidays</em>).
+        </p>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2>Funcionalidades principales</h2>
+        <ul>
+            <li>Registro automático de horas extra desde asistencia</li>
+            <li>Gestión centralizada mediante un banco de horas</li>
+            <li>Cálculo automático del saldo de horas por empleado</li>
+            <li>Compensación de horas en días de vacaciones</li>
+            <li>Registro de pagos de horas extra</li>
+            <li>Adjuntar documentación justificativa</li>
+            <li>Trazabilidad completa de movimientos</li>
+            <li>Integración con el calendario laboral del empleado</li>
+        </ul>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2>Cómo funciona</h2>
+        <p>
+            El módulo introduce un nuevo modelo:
+            <strong>Overtime Entries</strong> (<code>hr.overtime.entry</code>).
+        </p>
+        <p>
+            Cada registro representa un movimiento en el banco de horas del empleado.
+        </p>
+
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Descripción</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Extra</td>
+                    <td>Horas generadas automáticamente desde asistencia</td>
+                </tr>
+                <tr>
+                    <td>Payment</td>
+                    <td>Horas pagadas al empleado</td>
+                </tr>
+                <tr>
+                    <td>Compensation</td>
+                    <td>Horas convertidas en días de vacaciones</td>
+                </tr>
+                <tr>
+                    <td>Adjustment</td>
+                    <td>Ajustes manuales sobre el banco de horas</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2>Lógica del sistema</h2>
+        <ul>
+            <li>Las horas de tipo <strong>Extra</strong> suman al saldo del empleado</li>
+            <li>Las horas de tipo <strong>Payment</strong> y <strong>Compensation</strong> restan del saldo</li>
+            <li>Solo los registros en estado <strong>Confirmado</strong> afectan al saldo</li>
+            <li>La conversión de horas a días se realiza según el calendario laboral del empleado</li>
+            <li>Las modificaciones solo la pueden realizar usuarios dentro de los grupos permitidos</li>
+        </ul>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2>Guía básica de uso</h2>
+
+        <h3>1. Usuarios permitidos a la modificación</h3>
+        <p>
+            El modulo crea dos grupos de seguridad:
+            <strong>Overtime Admin</strong> y <strong>Overtime RRHH</strong>
+            Solo los usuarios asignados a estos grupos pueden crear, modificar 
+            o eliminar registros en el módulo. Los demás usuarios solo pueden consultar 
+            su propio saldo de horas
+        </p>
+
+        <h3>2. Vista general del módulo</h3>
+        
+        <img src="hr_overtime_bank_pro/static/description/paso1.png" alt="Vista general del módulo">
+        <br><br>
+
+        <h3>3. Generación de horas extra</h3>
+        <p>
+            Las horas extra se generan automáticamente desde el módulo de asistencia
+            (<strong>Attendances</strong>) cuando existen horas adicionales registradas.
+            Estas horas se integran directamente en el banco de horas del empleado. O las
+            puedes crear manualmente un registro de tipo <strong>Generar banco de horas 
+            extras</strong> para reflejar horas adicionales no registradas en asistencia.
+        </p>
+        <p>
+            <strong>Manual</strong>
+        </p>
+        <img src="hr_overtime_bank_pro/static/description/paso2.png" alt="Creación manual">
+
+        <p>
+            <strong>Automatico</strong>
+        </p>
+        <img src="hr_overtime_bank_pro/static/description/paso2-automatico.png" alt="Creación automática">
+        <br><br>
+
+        <h3>4. Consultar saldo</h3>
+        <p>
+            Desde la ficha del empleado podrás consultar el campo
+            <strong>Overtime Balance</strong>, que refleja el total de horas disponibles.
+        </p>
+
+        <p>
+            <strong>Horas totales</strong>
+        </p>
+
+        <img src="hr_overtime_bank_pro/static/description/reducción_horas_pago.png" alt="Horas totales">
+        <br><br>
+
+        <h3>5. Compensar horas en vacaciones</h3>
+        <ol>
+            <li>Crear un nuevo registro en <strong>Overtime Entries</strong></li>
+            <li>Seleccionar el tipo <strong>Compensation</strong></li>
+            <li>Introducir las horas a compensar</li>
+            <li>Cambiar el estado a <strong>Confirmado</strong></li>
+        </ol>
+        <p>
+            El sistema descontará esas horas del banco y generará automáticamente una
+            asignación de vacaciones en el módulo de ausencias.
+        </p>
+
+        <p>
+            <strong>Formulario</strong>
+        </p>
+
+        <img src="hr_overtime_bank_pro/static/description/paso4.png" alt="Form de compensación">
+
+        <p>
+            <strong>Comprobación</strong>
+        </p>
+
+        <img src="hr_overtime_bank_pro/static/description/reducción_horas_compensación.png" alt="Comprobación de reducción de horas">
+        <br><br>
+
+        <h3>6. Pagar horas extra</h3>
+        <ol>
+            <li>Crear un nuevo registro</li>
+            <li>Seleccionar el tipo <strong>Payment</strong></li>
+            <li>Indicar las horas a pagar</li>
+            <li>Confirmar el registro</li>
+        </ol>
+        <p>
+            El sistema restará automáticamente esas horas del saldo disponible.
+        </p>
+
+        <p>
+            <strong>Formulario</strong>
+        </p>
+
+        <img src="hr_overtime_bank_pro/static/description/paso3.png" alt="Form de pago">
+
+        <p>
+            <strong>Comprobación</strong>
+        </p>
+
+        <img src="hr_overtime_bank_pro/static/description/reducción_horas_pago.png" alt="Comprobación de reducción de horas">
+        <br><br>
+
+        <h3>7. Modificar o eliminar registros</h3>
+        <p>
+            Si un registro vuelve a estado <strong>Borrador</strong>, el sistema revierte su impacto.
+            Si se elimina, también se elimina cualquier efecto asociado, incluyendo asignaciones
+            de vacaciones generadas por compensación.
+        </p>
+
+        <h3>8. Adjuntar documentación</h3>
+        <p>
+            Cada movimiento permite registrar una descripción y adjuntar un documento justificativo.
+        </p>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2>Consideraciones</h2>
+        <ul>
+            <li>Las horas deben introducirse siempre en positivo</li>
+            <li>El sistema aplica automáticamente el efecto de suma o resta según el tipo</li>
+            <li>La compensación en días depende del horario del empleado</li>
+            <li>El tipo de ausencia utilizado para compensación debe existir en el módulo de vacaciones</li>
+        </ul>
+    </div>
+</section>
+
+<section class="oe_container">
+    <div class="oe_row oe_spaced">
+        <h2>Beneficios</h2>
+        <ul>
+            <li>Control total y trazabilidad sobre las horas extra</li>
+            <li>Reducción de errores manuales</li>
+            <li>Integración directa con Asistencias y Ausencias</li>
+            <li>Gestión flexible entre pago, compensación y ajustes</li>
+        </ul>
+    </div>
+</section>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Opción por defecto -->
+    <record id="serviflow_option_default" model="sb.hr.serviflow.option">
+        <field name="name">Servibyte Flow</field>
+        <field name="code">1</field>
+        <field name="sequence">1</field>
+    </record>
+
+    <!-- Configurar como activa (FORMA CORRECTA) -->
+    <function model="ir.config_parameter" name="set_param">
+        <value eval="'sb_hr_serviflow.active_option_id'"/>
+        <value eval="str(ref('sb_hr_serviflow.serviflow_option_default'))"/>
+    </function>
+
+</odoo>

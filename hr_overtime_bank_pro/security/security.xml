@@ -1,0 +1,13 @@
+<odoo>
+    <!-- Grupo Admin -->
+    <record id="group_overtime_admin" model="res.groups">
+        <field name="name">Overtime Admin</field>
+        <field name="category_id" ref="base.module_category_human_resources"/>
+    </record>
+
+    <!-- Grupo RRHH -->
+    <record id="group_overtime_hr" model="res.groups">
+        <field name="name">Overtime HR</field>
+        <field name="category_id" ref="base.module_category_human_resources"/>
+    </record>
+</odoo>

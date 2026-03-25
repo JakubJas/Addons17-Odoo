@@ -1,0 +1,49 @@
+<odoo>
+
+    <!-- Oculta el descontar original -->
+    <record id="hide_attendance_overtime_button" model="ir.ui.view">
+        <field name="name">hide.attendance.overtime.button</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr_holidays_attendance.hr_employee_view_form_inherit"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//button[@name='404']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- Oculta el contador original -->
+    <record id="hide_attendance_overtime_counter_button" model="ir.ui.view">
+        <field name="name">hide.attendance.overtime.counter.button</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr_attendance.view_employee_form_inherit_hr_attendance"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//button[@name='action_open_last_month_overtime']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+        </field>
+    </record>
+ 
+    <!-- Añade tu contador en el mismo header -->
+    <record id="add_overtime_bank_header_button" model="ir.ui.view">
+        <field name="name">add.overtime.bank.header.button</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr_holidays_attendance.hr_employee_view_form_inherit"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="inside">
+                <button name="action_open_overtime_bank"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-history">
+                    <field name="overtime_balance" string="Horas extras" widget="float_time"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

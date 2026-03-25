@@ -1,0 +1,34 @@
+<odoo>
+
+    <record id="view_employee_overtime" model="ir.ui.view">
+        <field name="name">hr.employee.overtime</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//sheet/notebook" position="inside">
+
+                <page string="Overtime Bank" groups="hr_overtime_bank_pro.group_overtime_hr, hr_overtime_bank_pro.group_overtime_admin">
+
+                    <group>
+                        <field name="overtime_balance" widget="float_time"/>
+                    </group>
+
+                    <field name="overtime_entry_ids" groups="hr_overtime_bank_pro.group_overtime_hr, hr_overtime_bank_pro.group_overtime_admin">
+                        <tree>
+                            <field name="date"/>
+                            <field name="type"/>
+                            <field name="hours"/>
+                            <field name="reference"/>
+                            <field name="state"/>
+                        </tree>
+                    </field>
+
+                </page>
+
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>
