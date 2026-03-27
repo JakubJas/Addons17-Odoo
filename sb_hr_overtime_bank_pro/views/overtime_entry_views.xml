@@ -95,6 +95,14 @@
         <field name="res_model">hr.overtime.entry</field>
         <field name="view_mode">tree,form</field>
         <field name="search_view_id" ref="view_hr_overtime_entry_search"/>
+        <field name="context">{'group_by': 'employee_id'}</field>
+    </record>
+
+     <record id="action_create_overtime_entry" model="ir.actions.act_window">
+        <field name="name">Nuevo registro de horas extra</field>
+        <field name="res_model">hr.overtime.entry</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
     </record>
 
 </odoo>

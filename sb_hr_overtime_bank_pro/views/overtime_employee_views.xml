@@ -8,22 +8,23 @@
 
             <xpath expr="//sheet/notebook" position="inside">
 
-                <page string="Overtime Bank" groups="hr_overtime_bank_pro.group_overtime_hr, hr_overtime_bank_pro.group_overtime_admin">
+                <page string="Overtime Bank" groups="sb_hr_overtime_bank_pro.group_overtime_hr, sb_hr_overtime_bank_pro.group_overtime_admin">
 
                     <!-- Hay que ajustar el botón para que genere el pop up y no que te envie al over time. Tambien tiene que pasar
                     al usuario que se va a crear le el registro -->
                     <group>
-                        <button name="%(action_overtime_entries)d"
-                            type="action"
-                            string="Nuevo"
-                            class="btn-primary"/>
+                        <button name="%(action_create_overtime_entry)d"
+                        type="action"
+                        string="Nuevo"
+                        context="{'default_employee_id': active_id}"
+                        class="btn-primary"/>
                     </group>
                     
                     <group>                        
                         <field name="overtime_balance" widget="float_time"/>
                     </group>
 
-                    <field name="overtime_entry_ids" groups="hr_overtime_bank_pro.group_overtime_hr, hr_overtime_bank_pro.group_overtime_admin">
+                    <field name="overtime_entry_ids" groups="sb_hr_overtime_bank_pro.group_overtime_hr, sb_hr_overtime_bank_pro.group_overtime_admin">
                         <tree>
                             <field name="date" string="Fecha"/>
                             <field name="type" string="Tipo"/>
