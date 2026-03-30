@@ -2,10 +2,30 @@ from odoo import models, fields
 import base64
 from io import BytesIO
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, time
 import xlsxwriter
+import pytz
 
 class OvertimeReportWizard(models.TransientModel):
+
+    report_type = fields.Selection([
+        ('payroll', 'Gestoría'),
+        ('employee', 'Trabajador'),
+        ('attendance', 'Asistencia'),
+    ], default=lambda self: self.env.context.get('report_type'))
+    
+    def action_generate(self):
+        report_type = self.env.context.get('report_type')
+
+        if report_type == 'employee':
+            return self.action_export_employee_excel()
+
+        elif report_type == 'attendance':
+            return self.action_export_attendance_excel()
+
+        else:
+            return self.action_export_payroll_excel()
+    
     _name = 'overtime.report.wizard'
     _description = 'Overtime Report Wizard'
 
@@ -58,22 +78,6 @@ class OvertimeReportWizard(models.TransientModel):
         sheet.set_column('B:B', 20)
         sheet.set_column('C:C', 20)
 
-        # LOGO
-        # Ajustar tamaño de fila y columna para "encajar" el logo
-        # sheet.set_row(0, 60)        # altura fila A1
-        # sheet.set_column('A:A', 25) # ancho columna A
-
-        # if company.logo:
-        #     image_data = BytesIO(base64.b64decode(company.logo))
-        #     sheet.insert_image('A1', 'logo.png', {
-        #         'image_data': image_data,
-        #         'x_scale': 0.5,
-        #         'y_scale': 0.5,
-        #         'x_offset': 5,
-        #         'y_offset': 5,
-        #         'object_position': 1 
-        #     })
-
         # NOMBRE EMPRESA
         sheet.merge_range('A1:C1', company.name, title_format)
 
@@ -85,7 +89,7 @@ class OvertimeReportWizard(models.TransientModel):
         )
 
         # ENCABEZADOS
-        start_row = 4
+        start_row = 5
 
         sheet.write(start_row, 0, 'Empleado', header)
         sheet.write(start_row, 1, 'DNI', header)
@@ -133,6 +137,40 @@ class OvertimeReportWizard(models.TransientModel):
             raise ValueError("Debes seleccionar un empleado.")
 
         employee = self.employee_id or self.env['hr.employee'].search([])
+        dni = employee.identification_id or ''
+
+        attendances = self.env['hr.attendance'].search([
+            ('employee_id', '=', employee.id),
+            ('check_in', '>=', self.date_from),
+            ('check_out', '<=', self.date_to),
+        ])
+
+        total_hours_month = sum(att.worked_hours for att in attendances)
+
+        attendances_total = self.env['hr.attendance'].search([
+            ('employee_id', '=', employee.id),
+            ('check_out', '!=', False),
+        ])
+        
+        total_hours = sum(att.worked_hours for att in attendances_total)
+
+        allocations = self.env['hr.leave.allocation'].search([
+            ('employee_id', '=', employee.id),
+            ('state', '=', 'validate'),
+            ('holiday_status_id.requires_allocation', '=', 'yes')
+        ])
+
+        total_allocated = sum(alloc.number_of_days for alloc in allocations)
+
+        leaves_taken = self.env['hr.leave'].search([
+            ('employee_id', '=', employee.id),
+            ('state', '=', 'validate'),
+            ('holiday_status_id.requires_allocation', '=', 'yes')
+        ])
+
+        total_taken = sum(leave.number_of_days for leave in leaves_taken)
+
+        remaining_leaves = total_allocated - total_taken
 
         overtime_domain = [
             ('employee_id', '=', employee.id),
@@ -179,7 +217,7 @@ class OvertimeReportWizard(models.TransientModel):
 
         sheet.set_column('A:A', 30)
         sheet.set_column('B:B', 30)
-        sheet.set_column('C:C', 18)
+        sheet.set_column('C:C', 25)
         sheet.set_column('D:D', 30)
         sheet.set_column('E:E', 30)
         sheet.set_column('F:F', 30)
@@ -193,6 +231,13 @@ class OvertimeReportWizard(models.TransientModel):
 
         sheet.write(row, 0, 'Empleado', bold_fmt)
         sheet.write(row, 1, employee.name or 'Empleado sin nombre')
+        sheet.write(row, 2, 'Días de vacaciones totales', bold_fmt)
+        sheet.write(row, 3,  f"{remaining_leaves:.2f} / {total_allocated:.2f}", number_fmt)
+        row += 1
+        sheet.write(row, 0, 'DNI', bold_fmt)
+        sheet.write(row, 1, dni or 'N/A')
+        sheet.write(row, 2, 'Horas trabajadas totales', bold_fmt)
+        sheet.write(row, 3, total_hours or 'N/A', number_fmt)
         row += 1
         sheet.write(row, 0, 'Fecha desde', bold_fmt)
         sheet.write(row, 1, str(self.date_from))
@@ -215,7 +260,7 @@ class OvertimeReportWizard(models.TransientModel):
         sheet.write(row, 0, 'Ajustes manuales', cell_fmt)
         sheet.write_number(row, 1, total_adjustment, number_fmt)
         row += 1
-        sheet.write(row, 0, 'Horas laborales totales', cell_fmt)
+        sheet.write(row, 0, 'Horas laborales totales del mes', cell_fmt)
         sheet.write_number(row, 1, total_worked, number_fmt)
         row += 1
         sheet.write(row, 0, 'Saldo final banco', cell_fmt)
@@ -270,6 +315,152 @@ class OvertimeReportWizard(models.TransientModel):
 
         attachment = self.env['ir.attachment'].create({
             'name': f'reporte_empleado_{employee.name}.xlsx',
+            'type': 'binary',
+            'datas': base64.b64encode(output.read()),
+            'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+        
+    def _get_expected_hours(self, employee, date):
+        calendar = employee.resource_calendar_id
+
+        if not calendar or not employee.resource_id:
+            return 0.0
+
+        tz = pytz.timezone(self.env.user.tz or 'UTC')
+
+        start = tz.localize(datetime.combine(date, time.min))
+        end = tz.localize(datetime.combine(date, time.max))
+
+        intervals = calendar._work_intervals_batch(
+            start, end, resources=employee.resource_id
+        )
+
+        total = 0.0
+        for interval in intervals.get(employee.resource_id.id, []):
+            duration = (interval[1] - interval[0]).total_seconds() / 3600
+            total += duration
+
+        return total
+
+    def action_export_attendance_excel(self):
+
+        employees = self.env['hr.employee'].search([])
+
+        output = BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        sheet = workbook.add_worksheet('Asistencia')
+
+        header = workbook.add_format({'bold': True, 'border': 1, 'align': 'center'})
+        normal = workbook.add_format()
+        bold_center = workbook.add_format({'bold': True, 'align': 'center'})
+        footer_format = workbook.add_format({'italic': True, 'align': 'center'})
+        
+        green = workbook.add_format({'bg_color': '#C6EFCE', 'border': 1, 'align': 'center'})
+        yellow = workbook.add_format({'bg_color': '#FFEB9C', 'border': 1, 'align': 'center'})
+        red = workbook.add_format({'bg_color': '#FFC7CE', 'border': 1, 'align': 'center'})
+        grey = workbook.add_format({'bg_color': '#D9D9D9', 'border': 1, 'align': 'center'})
+
+        title_format = workbook.add_format({'bold': True, 'font_size': 16, 'align': 'center'})
+        subtitle_format = workbook.add_format({'bold': True, 'align': 'left'})
+
+        sheet.set_column(0, 0, 30)
+        sheet.set_column(1, 100, 10)
+        sheet.freeze_panes(3, 1)
+
+        sheet.merge_range(
+            0, 0, 0, 6,
+            f'Reporte de Asistencia ({self.date_from} - {self.date_to})',
+            title_format
+        )
+
+        sheet.write(1, 0, 'Leyenda:', subtitle_format)
+        sheet.write(1, 1, 'Correcto', green)
+        sheet.write(1, 2, 'Incompleto', yellow)
+        sheet.write(1, 3, 'No fichó', red)
+        sheet.write(1, 4, 'Vacaciones', grey)
+
+        start_row = 3
+        sheet.write(start_row, 0, 'Empleado', header)
+
+        col = 1
+        dates = []
+        current_date = self.date_from
+
+        while current_date <= self.date_to:
+            sheet.write(start_row, col, current_date.strftime('%d/%m'), header)
+            dates.append(current_date)
+            col += 1
+            current_date += timedelta(days=1)
+
+        row = start_row + 1
+
+        for employee in employees:
+
+            sheet.write(row, 0, employee.name or '', normal)
+
+            col = 1
+
+            for date in dates:
+
+                # HORAS TRABAJADAS
+                attendances = self.env['hr.attendance'].search([
+                    ('employee_id', '=', employee.id),
+                    ('check_in', '>=', str(date) + ' 00:00:00'),
+                    ('check_in', '<=', str(date) + ' 23:59:59'),
+                ])
+
+                worked_hours = sum(attendances.mapped('worked_hours'))
+
+                # HORAS ESPERADAS
+                expected_hours = self._get_expected_hours(employee, date)
+
+                # VACACIONES
+                leave = self.env['hr.leave'].search([
+                    ('employee_id', '=', employee.id),
+                    ('state', '=', 'validate'),
+                    ('request_date_from', '<=', date),
+                    ('request_date_to', '>=', date),
+                ], limit=1)
+
+                # LÓGICA COLORES
+                if leave:
+                    fmt = grey
+                    value = 'V'
+
+                elif expected_hours == 0:
+                    fmt = grey
+                    value = ''
+
+                elif worked_hours == 0:
+                    fmt = red
+                    value = 0
+
+                elif worked_hours < expected_hours:
+                    fmt = yellow
+                    value = round(worked_hours, 2)
+
+                else:
+                    fmt = green
+                    value = round(worked_hours, 2)
+
+                sheet.write(row, col, value, fmt)
+                col += 1
+
+            row += 1
+
+        sheet.merge_range(row + 2, 0, row + 2, 6, f'Creado por Overtime Bank Pro - Servi Byte Canarias SL - {datetime.now().year}', footer_format)
+
+        workbook.close()
+        output.seek(0)
+
+        attachment = self.env['ir.attachment'].create({
+            'name': 'reporte_asistencia.xlsx',
             'type': 'binary',
             'datas': base64.b64encode(output.read()),
             'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

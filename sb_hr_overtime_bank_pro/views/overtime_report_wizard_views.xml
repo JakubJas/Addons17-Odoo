@@ -8,18 +8,28 @@
             <field name="arch" type="xml">
                 <form string="Reporte Gestoría">
                     <group>
-                        <field name="employee_id"/>
+                        <field name="report_type" invisible="1"/>
+                        <field name="employee_id" invisible="report_type != 'employee'"/>
                         <field name="date_from"/>
                         <field name="date_to"/>
                     </group>
                     <footer>
                         <button name="action_export_payroll_excel"
                                 type="object"
-                                string="Generar Excel"
+                                string="Exportar Gestoría"
+                                invisible="report_type != 'payroll'"
                                 class="btn-primary"/>
+
                         <button name="action_export_employee_excel"
                                 type="object"
-                                string="Excel Empleado"
+                                string="Exportar Trabajador"
+                                invisible="report_type != 'employee'"
+                                class="btn-primary"/>
+
+                        <button name="action_export_attendance_excel"
+                                type="object"
+                                string="Exportar Asistencia"
+                                invisible="report_type != 'attendance'"
                                 class="btn-primary"/>
                         <button string="Cancelar" special="cancel"/>
                     </footer>
@@ -27,11 +37,28 @@
             </field>
         </record>
 
-        <record id="action_overtime_report_wizard" model="ir.actions.act_window">
+        <record id="action_overtime_report_payroll" model="ir.actions.act_window">
             <field name="name">Reporte Gestoría</field>
             <field name="res_model">overtime.report.wizard</field>
             <field name="view_mode">form</field>
             <field name="target">new</field>
+            <field name="context">{'report_type': 'payroll'}</field>
+        </record>
+
+        <record id="action_overtime_report_employee" model="ir.actions.act_window">
+            <field name="name">Reporte Trabajador</field>
+            <field name="res_model">overtime.report.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="context">{'report_type': 'employee'}</field>
+        </record>
+
+        <record id="action_overtime_report_attendance" model="ir.actions.act_window">
+            <field name="name">Reporte Asistencia</field>
+            <field name="res_model">overtime.report.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="context">{'report_type': 'attendance'}</field>
         </record>
 
     </data>

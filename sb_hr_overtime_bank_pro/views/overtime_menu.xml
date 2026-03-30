@@ -3,16 +3,30 @@
       <menuitem id="menu_overtime_root" name="Overtime" sequence="10" web_icon="SB-Addons17,sb_hr_overtime_bank_pro/static/description/icon.png"/>
 
       <menuitem id="menu_overtime_entries"
-              name="Overtime Entries"
-              parent="menu_overtime_root"
-              action="action_overtime_entries"
-              sequence="20"/>
+            name="Overtime Entries"
+            parent="menu_overtime_root"
+            action="action_overtime_entries"
+            sequence="20"/>
 
-      <menuitem id="menu_overtime_report"
+      <menuitem id="menu_overtime_reports"
             name="Reportes"
             parent="menu_overtime_root"
-            action="action_overtime_report_wizard"
-            sequence="30"/>
+            sequence="25"/>
+
+      <menuitem id="menu_overtime_report_payroll"
+            name="Report Gestoría"
+            parent="menu_overtime_reports"
+            action="action_overtime_report_payroll"/>
+
+      <menuitem id="menu_overtime_report_employee"
+            name="Report Trabajador"
+            parent="menu_overtime_reports"
+            action="action_overtime_report_employee"/>
+
+      <menuitem id="menu_overtime_report_attendance"
+            name="Report Asistencias"
+            parent="menu_overtime_reports"
+            action="action_overtime_report_attendance"/>
 
       <menuitem id="menu_overtime_payments"
             name="Overtime Payments"
