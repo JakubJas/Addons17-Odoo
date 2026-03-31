@@ -1,0 +1,13 @@
+<odoo>
+
+    <!-- Ocultar report de Attendance -->
+    <record id="hr_attendance_xlsx_report.employee_attendance_report_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6,0,[ref('base.group_no_one')])]"/>
+    </record>
+
+    <!-- Ocultar Informes de Holidays -->
+    <record id="hr_holidays.menu_hr_holidays_report" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6,0,[ref('base.group_no_one')])]"/>
+    </record>
+
+</odoo>

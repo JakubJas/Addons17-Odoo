@@ -1,4 +1,5 @@
 from odoo import models, fields, api
+from odoo.exceptions import UserError
 
 
 class HrOvertimeEntry(models.Model):
@@ -6,6 +7,7 @@ class HrOvertimeEntry(models.Model):
     _description = "Overtime Bank Entry"
     _order = "date desc, id desc"
     _inherit = ["mail.thread", "mail.activity.mixin"]
+    MAX_HOURS = 80
 
     employee_id = fields.Many2one("hr.employee", required=True)
     date = fields.Date(default=fields.Date.today, tracking=True)
@@ -32,9 +34,35 @@ class HrOvertimeEntry(models.Model):
     attachment_filename = fields.Char("Nombre del archivo", tracking=True)
 
     leave_allocation_id = fields.Many2one("hr.leave.allocation")
+    
+    signed_hours = fields.Float(string="Horas reales", compute="_compute_signed_hours", store=True)
+
+    def _get_total_balance(self, employee):
+        entries = self.search([
+            ('employee_id', '=', employee.id),
+            ('state', '=', 'done')
+        ])
+        return sum(rec._get_signed_hours() for rec in entries)
 
     @api.model_create_multi
     def create(self, vals_list):
+
+        for vals in vals_list:
+            if vals.get('type') == 'extra' and vals.get('state', 'draft') == 'done':
+
+                employee = self.env['hr.employee'].browse(vals.get('employee_id'))
+
+                # Simular registro
+                fake = self.new(vals)
+                future_balance = self._get_total_balance(employee) + fake._get_signed_hours()
+
+                if future_balance > self.MAX_HOURS:
+                    raise UserError(
+                        f"El empleado ya tiene {round(future_balance - rec._get_signed_hours(), 2)} horas acumuladas.\n\n"
+                        f"No puede superar el límite de {self.MAX_HOURS} horas.\n\n"
+                        f"Reduce las horas o compensa antes de añadir más."
+                    )
+
         records = super().create(vals_list)
 
         for rec in records:
@@ -50,7 +78,35 @@ class HrOvertimeEntry(models.Model):
 
         return records
 
-    def write(self, vals):
+    def write(self, vals):        
+        for rec in self:
+            if any(field in vals for field in ['hours', 'type', 'state']):
+                
+                new_type = vals.get('type', rec.type)
+                new_state = vals.get('state', rec.state)
+                new_hours = vals.get('hours', rec.hours)
+
+                if new_type == 'extra' and new_state == 'done':
+                    fake = rec.new({
+                        'employee_id': rec.employee_id.id,
+                        'hours': new_hours,
+                        'type': new_type,
+                        'state': new_state,
+                    })
+
+                    future_balance = self._get_total_balance(rec.employee_id) \
+                                    - rec._get_signed_hours() \
+                                    + fake._get_signed_hours()
+
+                    if future_balance > self.MAX_HOURS:
+                        raise UserError(
+                            f"El empleado ya tiene {round(future_balance - rec._get_signed_hours(), 2)} horas acumuladas.\n\n"
+                            f"No puede superar el límite de {self.MAX_HOURS} horas.\n\n"
+                            f"Reduce las horas o compensa antes de añadir más."
+                        )
+
+        res = super().write(vals)
+        
         old_values = {}
 
         for rec in self:
@@ -59,8 +115,6 @@ class HrOvertimeEntry(models.Model):
                 'type': rec.type,
                 'state': rec.state,
             }
-
-        res = super().write(vals)
 
         for rec in self:
             changes = []
@@ -206,6 +260,11 @@ class HrOvertimeEntry(models.Model):
             return self.hours
 
         return 0.0
+    
+    @api.depends('hours', 'type', 'state')
+    def _compute_signed_hours(self):
+        for rec in self:
+            rec.signed_hours = rec._get_signed_hours()
 
     def unlink(self):
         for rec in self:

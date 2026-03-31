@@ -8,7 +8,7 @@
                 <field name="employee_id" string="Empleado"/>
                 <field name="date" string="Fecha"/>
                 <field name="type" string="Tipo"/>
-                <field name="hours" string="Horas"/>
+                <field name="signed_hours" string="Horas"/>
                 <field name="state" string="Estado"/>
                 <field name="description" string="Descripción"/>
             </tree>

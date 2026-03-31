@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, time
 import xlsxwriter
 import pytz
+import zipfile
 
 class OvertimeReportWizard(models.TransientModel):
 
@@ -130,13 +131,17 @@ class OvertimeReportWizard(models.TransientModel):
         
     def action_export_employee_excel(self):
         self.ensure_one()
-        
-        company = self.env.company 
 
-        if not self.employee_id:
-            raise ValueError("Debes seleccionar un empleado.")
+        if self.employee_id:
+            return self._export_single_employee(self.employee_id)
+        else:
+            return self._export_all_employees_zip()
 
-        employee = self.employee_id or self.env['hr.employee'].search([])
+    # =========================
+    # GENERADOR BASE (REUTILIZABLE)
+    # =========================
+    def _generate_employee_excel(self, employee):
+        company = self.env.company
         dni = employee.identification_id or ''
 
         attendances = self.env['hr.attendance'].search([
@@ -151,7 +156,7 @@ class OvertimeReportWizard(models.TransientModel):
             ('employee_id', '=', employee.id),
             ('check_out', '!=', False),
         ])
-        
+
         total_hours = sum(att.worked_hours for att in attendances_total)
 
         allocations = self.env['hr.leave.allocation'].search([
@@ -172,28 +177,25 @@ class OvertimeReportWizard(models.TransientModel):
 
         remaining_leaves = total_allocated - total_taken
 
-        overtime_domain = [
+        overtime_records = self.env['hr.overtime.entry'].search([
             ('employee_id', '=', employee.id),
             ('date', '>=', self.date_from),
             ('date', '<=', self.date_to),
             ('state', '=', 'done'),
-        ]
-        overtime_records = self.env['hr.overtime.entry'].search(overtime_domain, order='date asc, id asc')
+        ], order='date asc, id asc')
 
-        attendance_domain = [
+        attendances = self.env['hr.attendance'].search([
             ('employee_id', '=', employee.id),
             ('check_in', '>=', fields.Datetime.to_datetime(self.date_from)),
             ('check_in', '<=', fields.Datetime.to_datetime(self.date_to)),
-        ]
-        attendances = self.env['hr.attendance'].search(attendance_domain)
+        ])
 
-        leave_domain = [
+        leaves = self.env['hr.leave'].search([
             ('employee_id', '=', employee.id),
             ('state', '=', 'validate'),
             ('request_date_from', '<=', self.date_to),
             ('request_date_to', '>=', self.date_from),
-        ]
-        leaves = self.env['hr.leave'].search(leave_domain, order='request_date_from asc')
+        ], order='request_date_from asc')
 
         total_extra = sum(r.hours for r in overtime_records if r.type == 'extra')
         total_payment = sum(abs(r.hours) for r in overtime_records if r.type == 'payment')
@@ -202,10 +204,17 @@ class OvertimeReportWizard(models.TransientModel):
         total_worked = sum(attendances.mapped('worked_hours'))
         balance = sum(r._get_signed_hours() for r in overtime_records)
 
+        all_entries = self.env['hr.overtime.entry'].search([
+            ('employee_id', '=', employee.id),
+            ('state', '=', 'done'),
+        ])
+        total_balance = sum(r._get_signed_hours() for r in all_entries)
+
         output = BytesIO()
         workbook = xlsxwriter.Workbook(output)
         sheet = workbook.add_worksheet('Resumen empleado')
 
+        # FORMATOS
         company_fmt = workbook.add_format({'bold': True, 'font_size': 16, 'align': 'center'})
         title_fmt = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center'})
         header_fmt = workbook.add_format({'bold': True, 'bg_color': '#D9EAD3', 'border': 1, 'align': 'center'})
@@ -215,109 +224,135 @@ class OvertimeReportWizard(models.TransientModel):
         sign_fmt = workbook.add_format({'top': 1, 'align': 'center'})
         footer_fmt = workbook.add_format({'italic': True, 'align': 'center'})
 
-        sheet.set_column('A:A', 30)
-        sheet.set_column('B:B', 30)
-        sheet.set_column('C:C', 25)
-        sheet.set_column('D:D', 30)
-        sheet.set_column('E:E', 30)
-        sheet.set_column('F:F', 30)
+        # COLUMNAS
+        sheet.set_column('A:F', 30)
 
         row = 0
-        # NOMBRE EMPRESA
+
+        # HEADER
         sheet.merge_range(row, 0, row, 5, company.name, company_fmt)
         row += 1
-        sheet.merge_range(row, 0, row, 1, 'Reporte detallado de horas extra', title_fmt)
+        sheet.merge_range(row, 0, row, 5, 'Reporte detallado de horas extra', title_fmt)
         row += 2
 
+        # INFO
         sheet.write(row, 0, 'Empleado', bold_fmt)
-        sheet.write(row, 1, employee.name or 'Empleado sin nombre')
-        sheet.write(row, 2, 'Días de vacaciones totales', bold_fmt)
-        sheet.write(row, 3,  f"{remaining_leaves:.2f} / {total_allocated:.2f}", number_fmt)
+        sheet.write(row, 1, employee.name or 'N/A')
+        sheet.write(row, 2, 'Días vacaciones', bold_fmt)
+        sheet.write(row, 3, f"{remaining_leaves:.2f} / {total_allocated:.2f}", number_fmt)
         row += 1
+
         sheet.write(row, 0, 'DNI', bold_fmt)
-        sheet.write(row, 1, dni or 'N/A')
-        sheet.write(row, 2, 'Horas trabajadas totales', bold_fmt)
-        sheet.write(row, 3, total_hours or 'N/A', number_fmt)
+        sheet.write(row, 1, dni)
+        sheet.write(row, 2, 'Horas totales', bold_fmt)
+        sheet.write_number(row, 3, total_hours, number_fmt)
         row += 1
+
         sheet.write(row, 0, 'Fecha desde', bold_fmt)
         sheet.write(row, 1, str(self.date_from))
+        sheet.write(row, 2, 'Horas extra disponibles', bold_fmt)
+        sheet.write_number(row, 3, total_balance, number_fmt)
         row += 1
+
         sheet.write(row, 0, 'Fecha hasta', bold_fmt)
         sheet.write(row, 1, str(self.date_to))
         row += 2
 
-        sheet.merge_range(row, 0, row, 1, 'Resumen', header_fmt)
+        # RESUMEN
+        sheet.merge_range(row, 0, row, 1, 'Resumen (mes)', header_fmt)
         row += 1
-        sheet.write(row, 0, 'Horas extra generadas', cell_fmt)
+
+        sheet.write(row, 0, 'Horas extra', cell_fmt)
         sheet.write_number(row, 1, total_extra, number_fmt)
         row += 1
-        sheet.write(row, 0, 'Horas pagadas', cell_fmt)
+
+        sheet.write(row, 0, 'Pagadas', cell_fmt)
         sheet.write_number(row, 1, total_payment, number_fmt)
         row += 1
-        sheet.write(row, 0, 'Horas compensadas', cell_fmt)
+
+        sheet.write(row, 0, 'Compensadas', cell_fmt)
         sheet.write_number(row, 1, total_compensation, number_fmt)
         row += 1
-        sheet.write(row, 0, 'Ajustes manuales', cell_fmt)
+
+        sheet.write(row, 0, 'Ajustes', cell_fmt)
         sheet.write_number(row, 1, total_adjustment, number_fmt)
         row += 1
-        sheet.write(row, 0, 'Horas laborales totales del mes', cell_fmt)
+
+        sheet.write(row, 0, 'Horas trabajadas mes', cell_fmt)
         sheet.write_number(row, 1, total_worked, number_fmt)
         row += 1
-        sheet.write(row, 0, 'Saldo final banco', cell_fmt)
+
+        sheet.write(row, 0, 'Saldo mes', cell_fmt)
         sheet.write_number(row, 1, balance, number_fmt)
         row += 2
 
+        # DETALLE
         sheet.merge_range(row, 0, row, 5, 'Detalle de movimientos', header_fmt)
         row += 1
-        headers = ['Fecha', 'Tipo', 'Horas', 'Referencia', 'Descripción', 'Estado']
-        for col, header in enumerate(headers):
-            sheet.write(row, col, header, header_fmt)
-        row += 1
 
-        type_labels = dict(self.env['hr.overtime.entry']._fields['type'].selection)
-        state_labels = dict(self.env['hr.overtime.entry']._fields['state'].selection)
+        headers = ['Fecha', 'Tipo', 'Horas', 'Referencia', 'Descripción', 'Estado']
+        for col, h in enumerate(headers):
+            sheet.write(row, col, h, header_fmt)
+        row += 1
 
         for rec in overtime_records:
-            sheet.write(row, 0, str(rec.date or ''), cell_fmt)
-            sheet.write(row, 1, type_labels.get(rec.type, rec.type or ''), cell_fmt)
-            sheet.write_number(row, 2, rec.hours or 0.0, number_fmt)
+            sheet.write(row, 0, str(rec.date), cell_fmt)
+            sheet.write(row, 1, rec.type, cell_fmt)
+            sheet.write_number(row, 2, rec.hours, number_fmt)
             sheet.write(row, 3, rec.reference or '', cell_fmt)
             sheet.write(row, 4, rec.description or '', cell_fmt)
-            sheet.write(row, 5, state_labels.get(rec.state, rec.state or ''), cell_fmt)
+            sheet.write(row, 5, rec.state, cell_fmt)
             row += 1
 
-        row += 1
-        sheet.merge_range(row, 0, row, 4, 'Días libres utilizados', header_fmt)
-        row += 1
-
-        leave_headers = ['Desde', 'Hasta', 'Días', 'Tipo ausencia', 'Descripción']
-        for col, header in enumerate(leave_headers):
-            sheet.write(row, col, header, header_fmt)
-        row += 1
-
-        for leave in leaves:
-            sheet.write(row, 0, str(leave.request_date_from or ''), cell_fmt)
-            sheet.write(row, 1, str(leave.request_date_to or ''), cell_fmt)
-            sheet.write_number(row, 2, leave.number_of_days or 0.0, number_fmt)
-            sheet.write(row, 3, leave.holiday_status_id.name or '', cell_fmt)
-            sheet.write(row, 4, leave.name or '', cell_fmt)
-            row += 1
-
-        row += 3
+        # FOOTER
+        row += 2
         sheet.write(row, 1, 'Firma empleado', sign_fmt)
         sheet.write(row, 4, 'Firma empresa', sign_fmt)
         row += 2
-        
-        sheet.merge_range(row, 0, row, 5, f'Creado por Overtime Bank Pro - Servi Byte Canarias SL - {datetime.now().year}', footer_fmt)
+
+        sheet.merge_range(
+            row, 0, row, 5,
+            f'Creado por Overtime Bank Pro - {datetime.now().year}',
+            footer_fmt
+        )
 
         workbook.close()
         output.seek(0)
 
+        return output
+
+    def _export_single_employee(self, employee):
+        output = self._generate_employee_excel(employee)
+
         attachment = self.env['ir.attachment'].create({
-            'name': f'reporte_empleado_{employee.name}.xlsx',
+            'name': f'reporte_{employee.name}.xlsx',
             'type': 'binary',
             'datas': base64.b64encode(output.read()),
-            'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+    def _export_all_employees_zip(self):
+        employees = self.env['hr.employee'].search([])
+
+        zip_buffer = BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+            for employee in employees:
+                output = self._generate_employee_excel(employee)
+                filename = f"{employee.name.replace(' ', '_')}.xlsx"
+                zip_file.writestr(filename, output.getvalue())
+
+        zip_buffer.seek(0)
+
+        attachment = self.env['ir.attachment'].create({
+            'name': 'reportes_empleados.zip',
+            'type': 'binary',
+            'datas': base64.b64encode(zip_buffer.read()),
         })
 
         return {

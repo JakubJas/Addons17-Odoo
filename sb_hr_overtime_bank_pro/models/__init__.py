@@ -4,3 +4,4 @@ from . import overtime_entry
 from . import overtime_payment
 from . import mail_activity
 from . import mail_activity_mixin
+from . import menu_hide
