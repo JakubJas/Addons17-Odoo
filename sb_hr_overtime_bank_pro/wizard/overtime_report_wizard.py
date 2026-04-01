@@ -137,26 +137,20 @@ class OvertimeReportWizard(models.TransientModel):
         else:
             return self._export_all_employees_zip()
 
-    # =========================
-    # GENERADOR BASE (REUTILIZABLE)
-    # =========================
     def _generate_employee_excel(self, employee):
         company = self.env.company
         dni = employee.identification_id or ''
 
         attendances = self.env['hr.attendance'].search([
             ('employee_id', '=', employee.id),
-            ('check_in', '>=', self.date_from),
-            ('check_out', '<=', self.date_to),
+            ('check_in', '>=', fields.Datetime.to_datetime(self.date_from)),
+            ('check_in', '<=', fields.Datetime.to_datetime(self.date_to)),
         ])
-
-        total_hours_month = sum(att.worked_hours for att in attendances)
 
         attendances_total = self.env['hr.attendance'].search([
             ('employee_id', '=', employee.id),
             ('check_out', '!=', False),
         ])
-
         total_hours = sum(att.worked_hours for att in attendances_total)
 
         allocations = self.env['hr.leave.allocation'].search([
@@ -164,7 +158,6 @@ class OvertimeReportWizard(models.TransientModel):
             ('state', '=', 'validate'),
             ('holiday_status_id.requires_allocation', '=', 'yes')
         ])
-
         total_allocated = sum(alloc.number_of_days for alloc in allocations)
 
         leaves_taken = self.env['hr.leave'].search([
@@ -172,7 +165,6 @@ class OvertimeReportWizard(models.TransientModel):
             ('state', '=', 'validate'),
             ('holiday_status_id.requires_allocation', '=', 'yes')
         ])
-
         total_taken = sum(leave.number_of_days for leave in leaves_taken)
 
         remaining_leaves = total_allocated - total_taken
@@ -183,19 +175,6 @@ class OvertimeReportWizard(models.TransientModel):
             ('date', '<=', self.date_to),
             ('state', '=', 'done'),
         ], order='date asc, id asc')
-
-        attendances = self.env['hr.attendance'].search([
-            ('employee_id', '=', employee.id),
-            ('check_in', '>=', fields.Datetime.to_datetime(self.date_from)),
-            ('check_in', '<=', fields.Datetime.to_datetime(self.date_to)),
-        ])
-
-        leaves = self.env['hr.leave'].search([
-            ('employee_id', '=', employee.id),
-            ('state', '=', 'validate'),
-            ('request_date_from', '<=', self.date_to),
-            ('request_date_to', '>=', self.date_from),
-        ], order='request_date_from asc')
 
         total_extra = sum(r.hours for r in overtime_records if r.type == 'extra')
         total_payment = sum(abs(r.hours) for r in overtime_records if r.type == 'payment')
@@ -209,6 +188,13 @@ class OvertimeReportWizard(models.TransientModel):
             ('state', '=', 'done'),
         ])
         total_balance = sum(r._get_signed_hours() for r in all_entries)
+
+        leaves = self.env['hr.leave'].search([
+            ('employee_id', '=', employee.id),
+            ('state', '=', 'validate'),
+            ('request_date_from', '<=', self.date_to),
+            ('request_date_to', '>=', self.date_from),
+        ], order='request_date_from asc')
 
         output = BytesIO()
         workbook = xlsxwriter.Workbook(output)
@@ -224,18 +210,15 @@ class OvertimeReportWizard(models.TransientModel):
         sign_fmt = workbook.add_format({'top': 1, 'align': 'center'})
         footer_fmt = workbook.add_format({'italic': True, 'align': 'center'})
 
-        # COLUMNAS
         sheet.set_column('A:F', 30)
 
         row = 0
 
-        # HEADER
         sheet.merge_range(row, 0, row, 5, company.name, company_fmt)
         row += 1
         sheet.merge_range(row, 0, row, 5, 'Reporte detallado de horas extra', title_fmt)
         row += 2
 
-        # INFO
         sheet.write(row, 0, 'Empleado', bold_fmt)
         sheet.write(row, 1, employee.name or 'N/A')
         sheet.write(row, 2, 'Días vacaciones', bold_fmt)
@@ -258,7 +241,6 @@ class OvertimeReportWizard(models.TransientModel):
         sheet.write(row, 1, str(self.date_to))
         row += 2
 
-        # RESUMEN
         sheet.merge_range(row, 0, row, 1, 'Resumen (mes)', header_fmt)
         row += 1
 
@@ -286,26 +268,59 @@ class OvertimeReportWizard(models.TransientModel):
         sheet.write_number(row, 1, balance, number_fmt)
         row += 2
 
-        # DETALLE
         sheet.merge_range(row, 0, row, 5, 'Detalle de movimientos', header_fmt)
         row += 1
-
         headers = ['Fecha', 'Tipo', 'Horas', 'Referencia', 'Descripción', 'Estado']
+        for col, header in enumerate(headers):
+            sheet.write(row, col, header, header_fmt)
+        row += 1
+
+        type_labels = dict(self.env['hr.overtime.entry']._fields['type'].selection)
+        state_labels = dict(self.env['hr.overtime.entry']._fields['state'].selection)
+
+        for rec in overtime_records:
+            sheet.write(row, 0, str(rec.date or ''), cell_fmt)
+            sheet.write(row, 1, type_labels.get(rec.type, rec.type or ''), cell_fmt)
+            sheet.write_number(row, 2, rec.hours or 0.0, number_fmt)
+            sheet.write(row, 3, rec.reference or '', cell_fmt)
+            sheet.write(row, 4, rec.description or '', cell_fmt)
+            sheet.write(row, 5, state_labels.get(rec.state, rec.state or ''), cell_fmt)
+            row += 1
+
+        row += 2
+        sheet.merge_range(row, 0, row, 5, 'Detalle de asistencias', header_fmt)
+        row += 1
+
+        headers = ['Fecha', 'Entrada', 'Salida', 'Horas']
         for col, h in enumerate(headers):
             sheet.write(row, col, h, header_fmt)
         row += 1
 
-        for rec in overtime_records:
-            sheet.write(row, 0, str(rec.date), cell_fmt)
-            sheet.write(row, 1, rec.type, cell_fmt)
-            sheet.write_number(row, 2, rec.hours, number_fmt)
-            sheet.write(row, 3, rec.reference or '', cell_fmt)
-            sheet.write(row, 4, rec.description or '', cell_fmt)
-            sheet.write(row, 5, rec.state, cell_fmt)
+        for att in attendances:
+            sheet.write(row, 0, att.check_in.strftime('%d/%m/%Y') if att.check_in else '', cell_fmt)
+            sheet.write(row, 1, att.check_in.strftime('%H:%M') if att.check_in else '', cell_fmt)
+            sheet.write(row, 2, att.check_out.strftime('%H:%M') if att.check_out else '', cell_fmt)
+            sheet.write_number(row, 3, att.worked_hours or 0.0, number_fmt)
             row += 1
 
-        # FOOTER
         row += 2
+        sheet.merge_range(row, 0, row, 4, 'Días libres utilizados', header_fmt)
+        row += 1
+
+        leave_headers = ['Desde', 'Hasta', 'Días', 'Tipo ausencia', 'Descripción']
+        for col, header in enumerate(leave_headers):
+            sheet.write(row, col, header, header_fmt)
+        row += 1
+
+        for leave in leaves:
+            sheet.write(row, 0, str(leave.request_date_from or ''), cell_fmt)
+            sheet.write(row, 1, str(leave.request_date_to or ''), cell_fmt)
+            sheet.write_number(row, 2, leave.number_of_days or 0.0, number_fmt)
+            sheet.write(row, 3, leave.holiday_status_id.name or '', cell_fmt)
+            sheet.write(row, 4, leave.name or '', cell_fmt)
+            row += 1
+
+        row += 3
         sheet.write(row, 1, 'Firma empleado', sign_fmt)
         sheet.write(row, 4, 'Firma empresa', sign_fmt)
         row += 2
