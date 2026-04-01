@@ -18,7 +18,6 @@
         "security/ir.model.access.csv",
         "views/overtime_report_wizard_views.xml",
         "views/overtime_entry_views.xml",
-        'views/hide_menus.xml',
         "views/overtime_employee_views.xml",
         "views/overtime_payment_views.xml",
         "views/hr_attendance_inherit.xml",
