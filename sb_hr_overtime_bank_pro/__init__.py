@@ -1,6 +1,5 @@
 from . import models
 from . import wizard
-from . import report
 
 from odoo import fields
 
