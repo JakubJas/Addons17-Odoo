@@ -54,11 +54,15 @@ class HrOvertimeEntry(models.Model):
 
                 # Simular registro
                 fake = self.new(vals)
-                future_balance = self._get_total_balance(employee) + fake._get_signed_hours()
+                added_hours = fake._get_signed_hours()
+                current_balance = self._get_total_balance(employee)
+                future_balance = current_balance + added_hours
 
                 if future_balance > self.MAX_HOURS:
                     raise UserError(
-                        f"El empleado ya tiene {round(future_balance - rec._get_signed_hours(), 2)} horas acumuladas.\n\n"
+                        f"El empleado ya tiene {round(current_balance, 2)} horas acumuladas.\n\n"
+                        f"Estás intentando añadir {round(added_hours, 2)} horas.\n\n"
+                        f"El saldo final sería {round(future_balance, 2)} horas.\n\n"
                         f"No puede superar el límite de {self.MAX_HOURS} horas.\n\n"
                         f"Reduce las horas o compensa antes de añadir más."
                     )
