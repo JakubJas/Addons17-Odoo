@@ -4,7 +4,7 @@ from . import wizard
 from odoo import fields
 
 def migrate_overtime_from_attendance(env):
-
+    
     from .models.overtime_utils import get_expected_hours
 
     Overtime = env['hr.overtime.entry']
@@ -18,14 +18,12 @@ def migrate_overtime_from_attendance(env):
         employee = att.employee_id
         date = att.check_in.date()
 
+        expected_hours = _get_expected_hours(employee, date)
         worked_hours = att.worked_hours or 0
-        expected_hours = get_expected_hours(env, employee, date)
 
         overtime_hours = worked_hours - expected_hours
 
-        # DEBUG
-        # print(employee.name, worked_hours, expected_hours, overtime_hours)
-
+        # SOLO si hay horas extra reales
         if overtime_hours > 0:
             Overtime.with_context(
                 skip_overtime_limit=True,
