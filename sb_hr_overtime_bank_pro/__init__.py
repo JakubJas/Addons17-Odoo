@@ -6,38 +6,24 @@ from odoo import fields
 def migrate_overtime_from_attendance(env):
 
     Overtime = env['hr.overtime.entry']
-    Attendance = env['hr.attendance']
 
-    attendances = Attendance.search([
-        ('check_out', '!=', False),
+    attendances = env['hr.attendance'].search([
+        ('worked_hours', '>', 0),
     ])
 
     for att in attendances:
-        employee = att.employee_id
+        overtime_hours = att.worked_hours - (att.employee_id.resource_calendar_id.hours_per_day or 8)
 
-        if not employee or not employee.resource_calendar_id:
-            continue
-
-        hours_per_day = employee.resource_calendar_id.hours_per_day or 8.0
-        worked = att.worked_hours or 0.0
-        overtime = worked - hours_per_day
-
-        if overtime <= 0:
-            continue
-
-        existing = Overtime.search([
-            ('attendance_id', '=', att.id)
-        ], limit=1)
-
-        if existing:
-            continue
-
-        Overtime.create({
-            'employee_id': employee.id,
-            'date': att.check_in.date() if att.check_in else fields.Date.today(),
-            'hours': overtime,
-            'type': 'extra',
-            'attendance_id': att.id,
-            'reference': 'Migración automática desde Asistencias',
-            'state': 'done',
-        })
+        if overtime_hours > 0:
+            Overtime.with_context(
+                skip_overtime_limit=True,
+                skip_comp_sync=True
+            ).create({
+                'employee_id': att.employee_id.id,
+                'date': att.check_in.date(),
+                'hours': overtime_hours,
+                'type': 'extra',
+                'state': 'done',
+                'attendance_id': att.id,
+                'reference': 'Migración inicial',
+            })
