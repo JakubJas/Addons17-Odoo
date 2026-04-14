@@ -34,8 +34,8 @@ class CrmLead(models.Model):
                                 "res_id": lead.id,
                                 "user_id": user.id,
                                 "activity_type_id": activity_type.id,
-                                "summary": "Crear presupuesto técnico",
-                                "note": "Se ha solicitado un presupuesto técnico",
+                                "summary": f"PPTO: {lead.name}",
+                                "note": f"Se ha solicitado presupuesto para la oportunidad: {lead.name}",
                                 "date_deadline": fields.Date.today(),
                             })
 
