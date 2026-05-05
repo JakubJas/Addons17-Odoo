@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Vista lista -->
+    <record id="view_servilopd_request_tree" model="ir.ui.view">
+        <field name="name">servilopd.request.tree</field>
+        <field name="model">servilopd.request</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="email_to"/>
+                <field name="state"/>
+                <field name="token_expiration"/>
+                <field name="sent_date"/>
+                <field name="response_date"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista formulario -->
+    <record id="view_servilopd_request_form" model="ir.ui.view">
+        <field name="name">servilopd.request.form</field>
+        <field name="model">servilopd.request</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="partner_id"/>
+                        <field name="email_to"/>
+                        <field name="state"/>
+                        <field name="token" readonly="1"/>
+                        <field name="token_expiration" readonly="1"/>
+                    </group>
+
+                    <group>
+                        <field name="sent_date" readonly="1"/>
+                        <field name="response_date" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Acción -->
+    <record id="action_servilopd_request" model="ir.actions.act_window">
+        <field name="name">Solicitudes LOPD</field>
+        <field name="res_model">servilopd.request</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- Menú -->
+    <menuitem id="menu_servilopd_root" name="ServiLOPD" sequence="10"/>
+    <menuitem id="menu_servilopd_request"
+              name="Solicitudes"
+              parent="menu_servilopd_root"
+              action="action_servilopd_request"
+              sequence="10"/>
+
+</odoo>
