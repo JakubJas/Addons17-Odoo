@@ -9,7 +9,10 @@
 
                 <p>Cliente: <t t-esc="request_record.partner_id.name"/></p>
 
-                <form>
+                <form action="/lopd/form/submit" method="post">
+
+                    <input type="hidden" name="token" t-att-value="request_record.token"/>
+                
                     <div>
                         <label>Nombre</label>
                         <input type="text" name="firstname"/>
@@ -47,6 +50,15 @@
         <t t-call="website.layout">
             <div class="container mt-5">
                 <h3>El enlace ha expirado</h3>
+            </div>
+        </t>
+    </template>
+
+    <template id="lopd_thanks" name="Gracias LOPD">
+        <t t-call="website.layout">
+            <div class="container mt-5">
+                <h2>Gracias</h2>
+                <p>Hemos recibido tus datos correctamente.</p>
             </div>
         </t>
     </template>
