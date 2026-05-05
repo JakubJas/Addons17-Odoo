@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Formulario -->
+    <template id="lopd_form_template">
+        <t t-call="website.layout">
+            <div class="container mt-5">
+                <h2>Formulario LOPD</h2>
+
+                <p>Cliente: <t t-esc="request_record.partner_id.name"/></p>
+
+                <form>
+                    <div>
+                        <label>Nombre</label>
+                        <input type="text" name="firstname"/>
+                    </div>
+
+                    <div>
+                        <label>Email</label>
+                        <input type="email" name="email"/>
+                    </div>
+
+                    <div>
+                        <label>
+                            <input type="checkbox" required="required"/>
+                            Acepto la LOPD
+                        </label>
+                    </div>
+
+                    <button type="submit">Enviar</button>
+                </form>
+            </div>
+        </t>
+    </template>
+
+    <!-- Token inválido -->
+    <template id="token_invalid">
+        <t t-call="website.layout">
+            <div class="container mt-5">
+                <h3>Enlace inválido</h3>
+            </div>
+        </t>
+    </template>
+
+    <!-- Token expirado -->
+    <template id="token_expired">
+        <t t-call="website.layout">
+            <div class="container mt-5">
+                <h3>El enlace ha expirado</h3>
+            </div>
+        </t>
+    </template>
+
+</odoo>

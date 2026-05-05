@@ -4,7 +4,8 @@
     'depends': [
         'base', 
         'contacts', 
-        'mail'
+        'mail',
+        'website'
         ],
     'author': 'Servi Byte Canarias SL',
     'website': 'https://www.servibyte.com',
@@ -15,6 +16,7 @@
         'security/ir.model.access.csv',
         'views/res_partner_views.xml',
         'views/servilopd_request_views.xml',
+        'views/servilopd_templates.xml',
     ],
     'installable': True,
     'application': True,
