@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="mail_template_lopd_request" model="mail.template">
+        <field name="name">ServiLOPD - Solicitud de datos</field>
+        <field name="model_id" ref="model_servilopd_request"/>
+        <field name="subject">Solicitud de información LOPD</field>
+        <field name="email_from">{{ user.email_formatted }}</field>
+        <field name="email_to">{{ object.email_to }}</field>
+        <field name="body_html" type="html">
+            <div>
+                <p>Hola <t t-out="object.partner_id.name"/>,</p>
+
+                <p>
+                    Necesitamos que completes el siguiente formulario para actualizar
+                    tus datos y aceptar la política LOPD.
+                </p>
+
+                <p>
+                    <a t-att-href="object.form_url"
+                       style="background-color:#875A7B;color:white;padding:10px 16px;text-decoration:none;border-radius:4px;">
+                        Completar formulario
+                    </a>
+                </p>
+
+                <p>
+                    Este enlace caduca el:
+                    <strong><t t-out="object.token_expiration"/></strong>
+                </p>
+
+                <p>Gracias.</p>
+            </div>
+        </field>
+    </record>
+
+</odoo>

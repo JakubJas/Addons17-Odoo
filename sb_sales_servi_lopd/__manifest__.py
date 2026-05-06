@@ -17,6 +17,7 @@
         'views/res_partner_views.xml',
         'views/servilopd_request_views.xml',
         'views/servilopd_templates.xml',
+        'data/mail_template.xml',
     ],
     'installable': True,
     'application': True,

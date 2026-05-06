@@ -42,5 +42,13 @@ class ResPartner(models.Model):
                 'sent_date': fields.Datetime.now(),
             })
 
+            template = self.env.ref(
+                'sb_sales_servi_lopd.mail_template_lopd_request',
+                raise_if_not_found=False
+            )
+
+            if template:
+                template.send_mail(request.id, force_send=True)
+
             # actualizar estado del partner
             partner.lopd_state = 'sent'

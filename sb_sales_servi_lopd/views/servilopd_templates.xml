@@ -54,11 +54,22 @@
         </t>
     </template>
 
+    <!-- Envio correcto -->
     <template id="lopd_thanks" name="Gracias LOPD">
         <t t-call="website.layout">
             <div class="container mt-5">
                 <h2>Gracias</h2>
                 <p>Hemos recibido tus datos correctamente.</p>
+            </div>
+        </t>
+    </template>
+
+    <!-- Evita el doble envio de Form -->
+    <template id="lopd_already_submitted" name="LOPD ya enviada">
+        <t t-call="website.layout">
+            <div class="container mt-5">
+                <h2>Formulario ya enviado</h2>
+                <p>Este formulario ya fue completado anteriormente.</p>
             </div>
         </t>
     </template>

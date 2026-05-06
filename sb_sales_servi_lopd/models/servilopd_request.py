@@ -59,6 +59,34 @@ class ServilopdRequest(models.Model):
         copy=False,
     )
 
+    lopd_accept_ip = fields.Char(
+        string='IP aceptación LOPD',
+        readonly=True,
+    )
+
+    firstname = fields.Char(string='Nombre')
+    email = fields.Char(string='Email recibido')
+    lastname = fields.Char(string='Apellidos')
+    vat = fields.Char(string='CIF/NIF')
+    company_name = fields.Char(string='Empresa')
+    phone = fields.Char(string='Teléfono')
+
+    lopd_accepted = fields.Boolean(
+        string='LOPD aceptada',
+        readonly=True,
+    )
+
+    lopd_accepted_date = fields.Datetime(
+        string='Fecha aceptación LOPD',
+        readonly=True,
+    )
+
+    form_url = fields.Char(
+        string='URL formulario',
+        readonly=True,
+        copy=False,
+    )
+
     @api.model
     def create(self, vals):
         if not vals.get('token'):
@@ -67,4 +95,9 @@ class ServilopdRequest(models.Model):
         if not vals.get('token_expiration'):
             vals['token_expiration'] = fields.Datetime.now() + timedelta(days=10)
 
-        return super().create(vals)
+        record = super().create(vals)
+
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        record.form_url = f"{base_url}/lopd/form/{record.token}"
+
+        return record
