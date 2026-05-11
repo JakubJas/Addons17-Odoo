@@ -14,13 +14,31 @@
                     <input type="hidden" name="token" t-att-value="request_record.token"/>
                 
                     <div>
-                        <label>Nombre</label>
-                        <input type="text" name="firstname"/>
+                        <label>Nombre Empresa</label>
+                        <input type="text" name="company_name" t-att-value="request_record.partner_id.company_name or ''"/>
+                    </div>
+                    
+                    <div>
+                        <label>Nombre Completo</label>
+                        <input type="text" name="fullname" t-att-value="request_record.partner_id.name or ''"/>
                     </div>
 
                     <div>
                         <label>Email</label>
-                        <input type="email" name="email"/>
+                        <input type="email" name="email" t-att-value="request_record.partner_id.email or ''"/>
+                    </div>
+
+                    <div>
+                        <label>CIF/NIF</label>
+                        <input type="text" name="vat" t-att-value="request_record.partner_id.vat or ''"/>
+                    </div>
+
+                    <div>
+                        <label>Teléfono</label>
+                        <input type="tel" name="phone" t-att-value="request_record.partner_id.phone or ''"/>
+                        
+                        <label>Móvil</label>
+                        <input type="tel" name="mobile" t-att-value="request_record.partner_id.mobile or ''"/>
                     </div>
 
                     <div>

@@ -64,12 +64,13 @@ class ServilopdRequest(models.Model):
         readonly=True,
     )
 
-    firstname = fields.Char(string='Nombre')
+    fullname = fields.Char(string='Nombre')
     email = fields.Char(string='Email recibido')
     lastname = fields.Char(string='Apellidos')
     vat = fields.Char(string='CIF/NIF')
     company_name = fields.Char(string='Empresa')
     phone = fields.Char(string='Teléfono')
+    mobile = fields.Char(string='Móvil')
 
     lopd_accepted = fields.Boolean(
         string='LOPD aceptada',
@@ -87,6 +88,11 @@ class ServilopdRequest(models.Model):
         copy=False,
     )
 
+    lopd_version = fields.Char(
+        string='Versión LOPD',
+        readonly=True,
+    )
+
     @api.model
     def create(self, vals):
         if not vals.get('token'):
@@ -101,3 +107,43 @@ class ServilopdRequest(models.Model):
         record.form_url = f"{base_url}/lopd/form/{record.token}"
 
         return record
+    
+    def action_resend_lopd_request(self):
+        for record in self:
+            record.token = secrets.token_urlsafe(32)
+            record.token_expiration = fields.Datetime.now() + timedelta(minutes=1)
+
+            base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+            record.form_url = f"{base_url}/lopd/form/{record.token}"
+
+            record.write({
+                'state': 'sent',
+                'sent_date': fields.Datetime.now(),
+            })
+
+            template = self.env.ref(
+                'sb_sales_servi_lopd.mail_template_lopd_request',
+                raise_if_not_found=False
+            )
+
+            if template:
+                template.send_mail(record.id, force_send=True)
+
+            record.partner_id.write({
+                'lopd_state': 'sent',
+            })
+
+    def cron_expire_lopd_requests(self):
+        expired_requests = self.search([
+            ('state', '=', 'sent'),
+            ('token_expiration', '<', fields.Datetime.now()),
+        ])
+
+        for record in expired_requests:
+            record.write({
+                'state': 'expired',
+            })
+
+            record.partner_id.write({
+                'lopd_state': 'pending_review',
+            })

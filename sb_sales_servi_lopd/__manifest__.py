@@ -18,6 +18,7 @@
         'views/servilopd_request_views.xml',
         'views/servilopd_templates.xml',
         'data/mail_template.xml',
+        'data/ir_cron.xml',
     ],
     'installable': True,
     'application': True,

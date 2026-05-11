@@ -24,6 +24,15 @@
         <field name="model">servilopd.request</field>
         <field name="arch" type="xml">
             <form>
+
+                <header>
+                    <button name="action_resend_lopd_request"
+                            type="object"
+                            string="Reenviar formulario"
+                            class="btn-primary"
+                            invisible="not id"/>
+                </header>
+
                 <sheet>
                     <group>
                         <field name="name"/>
