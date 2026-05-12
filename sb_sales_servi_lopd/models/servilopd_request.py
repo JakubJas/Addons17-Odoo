@@ -111,7 +111,7 @@ class ServilopdRequest(models.Model):
     def action_resend_lopd_request(self):
         for record in self:
             record.token = secrets.token_urlsafe(32)
-            record.token_expiration = fields.Datetime.now() + timedelta(minutes=1)
+            record.token_expiration = fields.Datetime.now() + timedelta(days=10)
 
             base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
             record.form_url = f"{base_url}/lopd/form/{record.token}"
@@ -133,6 +133,10 @@ class ServilopdRequest(models.Model):
                 'lopd_state': 'sent',
             })
 
+            record.partner_id.message_post(
+                body="Formulario LOPD reenviado."
+            )
+
     def cron_expire_lopd_requests(self):
         expired_requests = self.search([
             ('state', '=', 'sent'),
@@ -147,3 +151,7 @@ class ServilopdRequest(models.Model):
             record.partner_id.write({
                 'lopd_state': 'pending_review',
             })
+
+            record.partner_id.message_post(
+                body="La solicitud LOPD expiró automáticamente."
+            )

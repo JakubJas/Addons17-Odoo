@@ -10,14 +10,30 @@
             <xpath expr="//sheet//group" position="inside">
                 <group string="ServiLOPD">
                     <field name="lopd_state" readonly="1"/>
+                    <button name="action_send_lopd_request"
+                            type="object"
+                            string="Enviar formulario LOPD"
+                            class="btn-primary"/>
                 </group>
             </xpath>
 
-            <xpath expr="//field[@name='lopd_state']" position="after">
-                <button name="action_send_lopd_request"
-                        type="object"
-                        string="Enviar formulario LOPD"
-                        class="btn-primary"/>
+        </field>
+    </record>
+
+    <record id="view_partner_tree_lopd" model="ir.ui.view">
+        <field name="name">res.partner.tree.lopd</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//tree" position="attributes">
+                <attribute name="decoration-success">lopd_state == 'signed'</attribute>
+                <attribute name="decoration-warning">lopd_state == 'sent'</attribute>
+                <attribute name="decoration-danger">lopd_state == 'pending_review'</attribute>
+            </xpath>
+
+            <xpath expr="//tree/field[@name='complete_name']" position="after">
+                <field name="lopd_state"/>
             </xpath>
 
         </field>

@@ -32,7 +32,10 @@ class ResPartner(models.Model):
     def action_send_lopd_request(self):
         for partner in self:
             if not partner.email:
-                raise UserError("El cliente no tiene email definido")
+                partner.message_post(
+                    body="No se pudo enviar formulario LOPD: cliente sin email."
+                )
+                continue
 
             request = self.env['servilopd.request'].create({
                 'name': f'LOPD - {partner.name}',
@@ -42,6 +45,14 @@ class ResPartner(models.Model):
                 'sent_date': fields.Datetime.now(),
             })
 
+            existing_request = self.env['servilopd.request'].search([
+                ('partner_id', '=', partner.id),
+                ('state', '=', 'sent')
+            ], limit=1)
+
+            if existing_request:
+                continue
+
             template = self.env.ref(
                 'sb_sales_servi_lopd.mail_template_lopd_request',
                 raise_if_not_found=False
@@ -50,5 +61,8 @@ class ResPartner(models.Model):
             if template:
                 template.send_mail(request.id, force_send=True)
 
-            # actualizar estado del partner
             partner.lopd_state = 'sent'
+
+            partner.message_post(
+                body="Formulario LOPD enviado al cliente."
+            )

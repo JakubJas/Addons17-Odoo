@@ -61,6 +61,7 @@ class ServilopdController(http.Controller):
             'lopd_accept_ip': ip,
             'state': 'answered',
             'response_date': fields.Datetime.now(),
+            'lopd_version': CURRENT_LOPD_VERSION,
         })
 
         lopd_request.partner_id.write({
@@ -71,7 +72,10 @@ class ServilopdController(http.Controller):
             'phone': post.get('phone') or lopd_request.partner_id.phone,
             'mobile': post.get('mobile') or lopd_request.partner_id.mobile,
             'email': post.get('email') or lopd_request.partner_id.email,
-            'lopd_version': CURRENT_LOPD_VERSION,
         })
+
+        lopd_request.partner_id.message_post(
+            body="Cliente aceptó la LOPD desde formulario web."
+        )
 
         return request.render('sb_sales_servi_lopd.lopd_thanks')
