@@ -39,6 +39,7 @@
                         <field name="partner_id"/>
                         <field name="email_to"/>
                         <field name="state"/>
+                        <field name="document_id" readonly="1"/>
                         <field name="token" readonly="1"/>
                         <field name="token_expiration" readonly="1"/>
                     </group>
@@ -59,13 +60,4 @@
         <field name="res_model">servilopd.request</field>
         <field name="view_mode">tree,form</field>
     </record>
-
-    <!-- Menú -->
-    <menuitem id="menu_servilopd_root" name="ServiLOPD" sequence="10"/>
-    <menuitem id="menu_servilopd_request"
-              name="Solicitudes"
-              parent="menu_servilopd_root"
-              action="action_servilopd_request"
-              sequence="10"/>
-
 </odoo>

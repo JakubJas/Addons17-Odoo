@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_servilopd_root"
+              name="ServiLOPD"
+              sequence="10"/>
+
+    <menuitem id="menu_servilopd_request"
+              name="Solicitudes"
+              parent="menu_servilopd_root"
+              action="action_servilopd_request"
+              sequence="10"/>
+
+    <menuitem id="menu_servilopd_document"
+              name="Documentos LOPD"
+              parent="menu_servilopd_root"
+              action="action_servilopd_document"
+              sequence="20"/>
+
+</odoo>

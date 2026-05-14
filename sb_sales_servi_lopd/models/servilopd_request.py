@@ -71,6 +71,19 @@ class ServilopdRequest(models.Model):
     company_name = fields.Char(string='Empresa')
     phone = fields.Char(string='Teléfono')
     mobile = fields.Char(string='Móvil')
+    street = fields.Char(string="Calle")
+    zip = fields.Char(string="C.P.")
+    city = fields.Char(string="Ciudad")
+    
+    country_id = fields.Many2one(
+        comodel_name='res.country',
+        string='País',
+    )
+
+    state_id = fields.Many2one(
+        comodel_name='res.country.state',
+        string='Provincia',
+    )
 
     lopd_accepted = fields.Boolean(
         string='LOPD aceptada',
@@ -92,6 +105,11 @@ class ServilopdRequest(models.Model):
         string='Versión LOPD',
         readonly=True,
     )
+    
+    document_id = fields.Many2one(
+        'servilopd.document',
+        string='Documento LOPD'
+    )
 
     @api.model
     def create(self, vals):
@@ -100,6 +118,13 @@ class ServilopdRequest(models.Model):
 
         if not vals.get('token_expiration'):
             vals['token_expiration'] = fields.Datetime.now() + timedelta(days=10)
+            
+        document = self.env['servilopd.document'].search([
+            ('active', '=', True)
+        ], limit=1)
+
+        if document:
+            vals['document_id'] = document.id
 
         record = super().create(vals)
 
@@ -116,10 +141,19 @@ class ServilopdRequest(models.Model):
             base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
             record.form_url = f"{base_url}/lopd/form/{record.token}"
 
-            record.write({
+            document = self.env['servilopd.document'].search([
+                ('active', '=', True)
+            ], limit=1)
+
+            vals = {
                 'state': 'sent',
                 'sent_date': fields.Datetime.now(),
-            })
+            }
+
+            if document:
+                vals['document_id'] = document.id
+
+            record.write(vals)
 
             template = self.env.ref(
                 'sb_sales_servi_lopd.mail_template_lopd_request',

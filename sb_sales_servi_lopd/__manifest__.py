@@ -16,6 +16,8 @@
         'security/ir.model.access.csv',
         'views/res_partner_views.xml',
         'views/servilopd_request_views.xml',
+        'views/servilopd_document_views.xml',
+        'views/servilopd_menu.xml',
         'views/servilopd_templates.xml',
         'data/mail_template.xml',
         'data/ir_cron.xml',

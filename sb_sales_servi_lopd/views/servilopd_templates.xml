@@ -2,55 +2,268 @@
 <odoo>
 
     <!-- Formulario -->
-    <template id="lopd_form_template">
+    <template id="lopd_form_template" name="Formulario LOPD">
         <t t-call="website.layout">
-            <div class="container mt-5">
-                <h2>Formulario LOPD</h2>
+            <div class="container my-5">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8 col-md-10">
 
-                <p>Cliente: <t t-esc="request_record.partner_id.name"/></p>
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-primary text-white py-4">
+                                <h2 class="mb-1">Actualización de datos LOPD</h2>
+                                <p class="mb-0">
+                                    Cliente:
+                                    <strong>
+                                        <t t-esc="request_record.partner_id.name"/>
+                                    </strong>
+                                </p>
+                            </div>
 
-                <form action="/lopd/form/submit" method="post">
+                            <div class="card-body p-4">
 
-                    <input type="hidden" name="token" t-att-value="request_record.token"/>
-                
-                    <div>
-                        <label>Nombre Empresa</label>
-                        <input type="text" name="company_name" t-att-value="request_record.partner_id.company_name or ''"/>
+                                <p class="text-muted mb-4">
+                                    Por favor, revisa tus datos, corrige cualquier información incorrecta
+                                    y acepta el documento LOPD para finalizar el proceso.
+                                </p>
+
+                                <form action="/lopd/form/submit" method="post">
+
+                                    <input type="hidden" name="token" t-att-value="request_record.token"/>
+
+                                    <h5 class="mb-3">Datos principales</h5>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Nombre empresa*</label>
+                                            <input type="text"
+                                                name="company_name"
+                                                class="form-control"
+                                                required="required"
+                                                t-att-value="request_record.partner_id.company_name or ''"/>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Nombre completo*</label>
+                                            <input type="text"
+                                                name="fullname"
+                                                class="form-control"
+                                                required="required"
+                                                t-att-value="request_record.partner_id.name or ''"/>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Email*</label>
+                                            <input type="email"
+                                                name="email"
+                                                class="form-control"
+                                                required="required"
+                                                t-att-value="request_record.partner_id.email or ''"/>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">CIF / NIF / NIE*</label>
+                                            <input type="text"
+                                                name="vat"
+                                                class="form-control"
+                                                required="required"
+                                                t-att-value="request_record.partner_id.vat or ''"/>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Teléfono</label>
+                                            <input type="tel"
+                                                name="phone"
+                                                class="form-control"
+                                                t-att-value="request_record.partner_id.phone or ''"/>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Móvil</label>
+                                            <input type="tel"
+                                                name="mobile"
+                                                class="form-control"
+                                                t-att-value="request_record.partner_id.mobile or ''"/>
+                                        </div>
+                                    </div>
+
+                                    <hr class="my-4"/>
+
+                                    <h5 class="mb-3">Dirección</h5>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Calle</label>
+                                        <input type="text"
+                                            name="street"
+                                            class="form-control"
+                                            t-att-value="request_record.partner_id.street or ''"/>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">C.P.</label>
+                                            <input type="text"
+                                                name="zip"
+                                                class="form-control"
+                                                t-att-value="request_record.partner_id.zip or ''"/>
+                                        </div>
+
+                                        <div class="col-md-8 mb-3">
+                                            <label class="form-label">Ciudad</label>
+                                            <input type="text"
+                                                name="city"
+                                                class="form-control"
+                                                t-att-value="request_record.partner_id.city or ''"/>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">País</label>
+                                            <select name="country_id" id="country_id" class="form-control">
+                                                <option value="">Seleccione un país</option>
+
+                                                <t t-foreach="countries" t-as="country">
+                                                    <option t-att-value="country.id"
+                                                            t-att-selected="country.id == request_record.partner_id.country_id.id">
+                                                        <t t-esc="country.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Provincia</label>
+                                            <select name="state_id" id="state_id" class="form-control">
+                                                <option value="">Seleccione una provincia</option>
+
+                                                <t t-foreach="states" t-as="state">
+                                                    <option t-att-value="state.id"
+                                                            t-att-selected="state.id == request_record.partner_id.state_id.id">
+                                                        <t t-esc="state.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                            <small class="text-muted">
+                                                Si no aparecen provincias, el país seleccionado no tiene provincias cargadas.
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <hr class="my-4"/>
+
+                                    <div class="alert alert-light border">
+                                        <h5 class="mb-2">Documento LOPD</h5>
+
+                                        <p class="mb-2">
+                                            Antes de aceptar, lee el documento LOPD vigente.
+                                        </p>
+
+                                        <t t-if="request_record.document_id">
+                                            <p class="mb-0">
+                                                <a t-att-href="'/lopd/document/%s' % request_record.token"
+                                                target="_blank"
+                                                class="btn btn-outline-primary btn-sm">
+                                                    Leer documento LOPD
+                                                </a>
+
+                                                <span class="ms-2 text-muted">
+                                                    Versión:
+                                                    <t t-esc="request_record.document_id.version"/>
+                                                </span>
+                                            </p>
+                                        </t>
+
+                                        <t t-if="not request_record.document_id">
+                                            <p class="text-danger mb-0">
+                                                No hay documento LOPD asociado a esta solicitud.
+                                            </p>
+                                        </t>
+                                    </div>
+
+                                    <div class="form-check my-4">
+                                        <input type="checkbox"
+                                            name="lopd_accept"
+                                            id="lopd_accept"
+                                            class="form-check-input"
+                                            required="required"/>
+
+                                        <label class="form-check-label" for="lopd_accept">
+                                            He leído y acepto el documento LOPD.*
+                                        </label>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-primary btn-lg">
+                                            Enviar datos
+                                        </button>
+                                    </div>
+
+                                </form>
+                            </div>
+
+                            <div class="card-footer text-muted small">
+                                Este enlace es personal e intransferible. Si tienes dudas, contacta con nosotros.
+                            </div>
+                        </div>
+
                     </div>
-                    
-                    <div>
-                        <label>Nombre Completo</label>
-                        <input type="text" name="fullname" t-att-value="request_record.partner_id.name or ''"/>
-                    </div>
-
-                    <div>
-                        <label>Email</label>
-                        <input type="email" name="email" t-att-value="request_record.partner_id.email or ''"/>
-                    </div>
-
-                    <div>
-                        <label>CIF/NIF</label>
-                        <input type="text" name="vat" t-att-value="request_record.partner_id.vat or ''"/>
-                    </div>
-
-                    <div>
-                        <label>Teléfono</label>
-                        <input type="tel" name="phone" t-att-value="request_record.partner_id.phone or ''"/>
-                        
-                        <label>Móvil</label>
-                        <input type="tel" name="mobile" t-att-value="request_record.partner_id.mobile or ''"/>
-                    </div>
-
-                    <div>
-                        <label>
-                            <input type="checkbox" required="required"/>
-                            Acepto la LOPD
-                        </label>
-                    </div>
-
-                    <button type="submit">Enviar</button>
-                </form>
+                </div>
             </div>
+
+            <script>
+            document.addEventListener('DOMContentLoaded', function () {
+
+                const countrySelect = document.getElementById('country_id');
+                const stateSelect = document.getElementById('state_id');
+
+                if (!countrySelect || !stateSelect) {
+                    return;
+                }
+
+                countrySelect.addEventListener('change', function () {
+
+                    const countryId = countrySelect.value;
+
+                    stateSelect.innerHTML =
+                        '<option value="">Seleccione una provincia</option>';
+
+                    if (!countryId) {
+                        return;
+                    }
+
+                    fetch('/lopd/states/' + countryId, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({})
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+
+                        const states = data.result || [];
+
+                        states.forEach(function(state) {
+
+                            const option = document.createElement('option');
+
+                            option.value = state.id;
+                            option.textContent = state.name;
+
+                            stateSelect.appendChild(option);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error cargando provincias:', error);
+                    });
+                });
+
+            });
+            </script>
         </t>
     </template>
 
