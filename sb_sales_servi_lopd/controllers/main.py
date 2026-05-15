@@ -5,6 +5,10 @@ from odoo.http import request
 
 class ServilopdController(http.Controller):
 
+    @http.route('/', type='http', auth='public', website=True)
+    def redirect_home_to_login(self, **kwargs):
+        return request.redirect('/web/login')
+    
     @http.route(
         '/lopd/states/<int:country_id>',
         type='json',

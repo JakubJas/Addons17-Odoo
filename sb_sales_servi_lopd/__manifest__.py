@@ -19,10 +19,16 @@
         'views/servilopd_document_views.xml',
         'views/servilopd_menu.xml',
         'views/servilopd_templates.xml',
+        'views/login_templates.xml',
         'data/mail_template.xml',
         'data/ir_cron.xml',
         'data/server_action.xml',
     ],
+    'assets': {
+        'web.assets_frontend': [
+            'sb_sales_servi_lopd/static/src/css/login_clean.css',
+        ],
+    },
     'installable': True,
     'application': True,
 }

@@ -43,9 +43,22 @@ class ResPartner(models.Model):
                 partner.message_post(
                     body="No se pudo enviar formulario LOPD: cliente sin email."
                 )
+                partner.lopd_state = 'pending_review'
                 continue
 
-            request = self.env['servilopd.request'].create({
+            existing_request = self.env['servilopd.request'].search([
+                ('partner_id', '=', partner.id),
+                ('state', '=', 'sent'),
+                ('token_expiration', '>=', fields.Datetime.now()),
+            ], limit=1)
+
+            if existing_request:
+                partner.message_post(
+                    body="No se creó una nueva solicitud LOPD porque ya existe una solicitud enviada y vigente."
+                )
+                continue
+
+            lopd_request = self.env['servilopd.request'].create({
                 'name': f'LOPD - {partner.name}',
                 'partner_id': partner.id,
                 'email_to': partner.email,
@@ -53,21 +66,13 @@ class ResPartner(models.Model):
                 'sent_date': fields.Datetime.now(),
             })
 
-            existing_request = self.env['servilopd.request'].search([
-                ('partner_id', '=', partner.id),
-                ('state', '=', 'sent')
-            ], limit=1)
-
-            if existing_request:
-                continue
-
             template = self.env.ref(
                 'sb_sales_servi_lopd.mail_template_lopd_request',
                 raise_if_not_found=False
             )
 
             if template:
-                template.send_mail(request.id, force_send=True)
+                template.send_mail(lopd_request.id, force_send=True)
 
             partner.lopd_state = 'sent'
 

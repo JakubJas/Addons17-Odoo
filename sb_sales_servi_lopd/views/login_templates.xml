@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="custom_login_logo" inherit_id="web.login">
+
+        <xpath expr="//form/*[1]" position="before">
+
+            <div class="text-center mb-4 custom_login_logo_container">
+                <img t-att-src="'/web/image/res.company/%s/logo' % request.env.company.id"
+                     alt="Logo compañía"
+                     class="custom_login_logo"/>
+            </div>
+
+        </xpath>
+
+    </template>
+
+</odoo>

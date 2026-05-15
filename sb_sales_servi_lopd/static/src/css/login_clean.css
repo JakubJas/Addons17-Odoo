@@ -1,0 +1,27 @@
+body:has(form[action="/web/login"]) header,
+body:has(form[action="/web/login"]) footer,
+body:has(form[action="/web/login"]) .o_footer,
+body:has(form[action="/web/login"]) #top,
+body:has(form[action="/web/login"]) .navbar {
+    display: none !important;
+}
+
+body:has(form[action="/web/login"]) main {
+    padding-top: 0 !important;
+}
+
+body:has(form[action="/web/login"]) .oe_website_login_container {
+    margin-top: 60px !important;
+}
+
+.custom_login_logo_container {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.custom_login_logo {
+    max-width: 220px;
+    max-height: 180px;
+    object-fit: contain;
+}
