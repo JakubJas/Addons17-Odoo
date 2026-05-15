@@ -3,7 +3,8 @@
 
     <menuitem id="menu_servilopd_root"
               name="ServiLOPD"
-              sequence="10"/>
+              sequence="10"
+              web_icon="SB-Addons17,sb_sales_servi_lopd/static/description/icon.png"/>
 
     <menuitem id="menu_servilopd_request"
               name="Solicitudes"

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"/>
+    <title>ServiLOPD</title>
+</head>
+<body>
+
+<section>
+    <h1>ServiLOPD</h1>
+    <h2>Gestión de solicitudes LOPD/GDPR para clientes y proveedores en Odoo</h2>
+
+    <p>
+        ServiLOPD es un módulo para Odoo 17 diseñado para gestionar el envío,
+        recepción, control y trazabilidad de solicitudes LOPD/GDPR asociadas a
+        clientes y proveedores.
+    </p>
+
+    <p>
+        El módulo permite solicitar información actualizada a los contactos,
+        enviarles un formulario seguro mediante enlace único, registrar la
+        aceptación del documento LOPD y actualizar automáticamente la ficha del
+        cliente o proveedor dentro de Odoo.
+    </p>
+</section>
+
+<section>
+    <h2>Funcionamiento general</h2>
+
+    <p>
+        El funcionamiento de ServiLOPD se basa en un flujo sencillo y controlado:
+    </p>
+
+    <ol>
+        <li>
+            El usuario selecciona un cliente o proveedor desde Odoo.
+        </li>
+        <li>
+            Desde la ficha del contacto se pulsa el botón
+            <strong>Enviar formulario LOPD</strong>.
+        </li>
+        <li>
+            El sistema crea una solicitud LOPD asociada a ese contacto.
+        </li>
+        <li>
+            La solicitud genera automáticamente un token único y una fecha de
+            expiración.
+        </li>
+        <li>
+            El cliente recibe un correo electrónico con un enlace seguro al
+            formulario.
+        </li>
+        <li>
+            El cliente accede al formulario, revisa sus datos, los modifica si
+            es necesario y acepta el documento LOPD.
+        </li>
+        <li>
+            Odoo registra la respuesta, actualiza la ficha del contacto y cambia
+            el estado LOPD correspondiente.
+        </li>
+    </ol>
+</section>
+
+<section>
+    <h2>Formulario público seguro</h2>
+
+    <p>
+        Cada solicitud LOPD genera un enlace único asociado a un token. Este
+        enlace permite acceder a un formulario público sin necesidad de que el
+        cliente tenga usuario de Odoo.
+    </p>
+
+    <p>
+        El formulario se entrega precargado con los datos ya existentes en la
+        ficha del contacto para que el cliente pueda confirmarlos o corregirlos.
+    </p>
+
+    <p>
+        El formulario permite recoger y actualizar, entre otros, los siguientes
+        datos:
+    </p>
+
+    <ul>
+        <li>Nombre de empresa</li>
+        <li>Nombre completo</li>
+        <li>Email</li>
+        <li>CIF, NIF o NIE</li>
+        <li>Teléfono</li>
+        <li>Móvil</li>
+        <li>Calle</li>
+        <li>Código postal</li>
+        <li>Ciudad</li>
+        <li>País</li>
+        <li>Provincia</li>
+    </ul>
+
+    <p>
+        Los campos principales pueden configurarse como obligatorios para
+        garantizar que la solicitud no se envíe incompleta.
+    </p>
+</section>
+
+<section>
+    <h2>Documento LOPD versionado</h2>
+
+    <p>
+        El módulo incorpora una sección específica para gestionar documentos
+        LOPD desde Odoo. Desde esta sección el usuario puede subir el documento
+        legal vigente sin necesidad de modificar código.
+    </p>
+
+    <p>
+        Cada documento puede tener:
+    </p>
+
+    <ul>
+        <li>Nombre</li>
+        <li>Versión</li>
+        <li>Archivo PDF</li>
+        <li>Estado activo o inactivo</li>
+    </ul>
+
+    <p>
+        Al generar una nueva solicitud, el sistema vincula automáticamente el
+        documento LOPD activo. De esta forma, cada aceptación queda asociada a
+        una versión concreta del documento legal.
+    </p>
+
+    <p>
+        En el formulario público el cliente puede abrir el documento LOPD desde
+        un enlace seguro antes de marcar la casilla de aceptación.
+    </p>
+</section>
+
+<section>
+    <h2>Aceptación LOPD</h2>
+
+    <p>
+        Para completar el formulario, el cliente debe aceptar expresamente el
+        documento LOPD mediante una casilla obligatoria.
+    </p>
+
+    <p>
+        Cuando el cliente envía el formulario, ServiLOPD registra:
+    </p>
+
+    <ul>
+        <li>Fecha y hora de aceptación</li>
+        <li>Dirección IP desde la que se aceptó</li>
+        <li>Versión del documento LOPD aceptado</li>
+        <li>Solicitud asociada</li>
+        <li>Contacto relacionado</li>
+        <li>Datos enviados por el cliente</li>
+    </ul>
+
+    <p>
+        Esta información permite mantener una trazabilidad clara de cada
+        aceptación realizada.
+    </p>
+</section>
+
+<section>
+    <h2>Estados LOPD</h2>
+
+    <p>
+        El módulo gestiona estados para controlar el ciclo de vida de cada
+        solicitud y la situación LOPD del contacto.
+    </p>
+
+    <p>
+        Las solicitudes pueden encontrarse en estados como:
+    </p>
+
+    <ul>
+        <li>Borrador</li>
+        <li>Enviado</li>
+        <li>Respondido</li>
+        <li>Expirado</li>
+        <li>Cancelado</li>
+    </ul>
+
+    <p>
+        En la ficha del cliente o proveedor también se muestra el estado LOPD
+        actual, permitiendo identificar rápidamente si la solicitud está
+        pendiente, enviada, firmada o pendiente de revisión.
+    </p>
+</section>
+
+<section>
+    <h2>Envío individual</h2>
+
+    <p>
+        Desde la ficha de un cliente o proveedor, el usuario puede enviar una
+        solicitud LOPD de forma individual.
+    </p>
+
+    <p>
+        Al pulsar el botón de envío, el sistema:
+    </p>
+
+    <ol>
+        <li>Crea una nueva solicitud LOPD.</li>
+        <li>Genera un token único.</li>
+        <li>Calcula la fecha de expiración.</li>
+        <li>Asocia el documento LOPD activo.</li>
+        <li>Envía el email al contacto.</li>
+        <li>Cambia el estado del contacto a enviado.</li>
+        <li>Registra el evento en el historial del contacto.</li>
+    </ol>
+</section>
+
+<section>
+    <h2>Envío masivo</h2>
+
+    <p>
+        ServiLOPD permite enviar solicitudes LOPD de forma masiva desde la lista
+        de clientes o proveedores.
+    </p>
+
+    <p>
+        El usuario puede seleccionar varios contactos mediante los checkboxes de
+        la vista lista y ejecutar la acción de envío masivo.
+    </p>
+
+    <p>
+        Para cada contacto seleccionado, el módulo genera una solicitud
+        independiente con su propio token, enlace, fecha de expiración y
+        documento asociado.
+    </p>
+
+    <p>
+        Si un contacto no dispone de email, el sistema puede dejar constancia en
+        el historial del contacto y marcarlo para revisión, evitando que el
+        proceso masivo se detenga por completo.
+    </p>
+</section>
+
+<section>
+    <h2>Reenvío de solicitudes</h2>
+
+    <p>
+        Desde una solicitud LOPD existente, el usuario puede reenviar el
+        formulario al cliente o proveedor.
+    </p>
+
+    <p>
+        El reenvío genera un nuevo token, actualiza la fecha de expiración,
+        mantiene la solicitud asociada al contacto y vuelve a enviar el correo
+        electrónico.
+    </p>
+
+    <p>
+        Esta función es útil cuando el cliente no ha respondido, el enlace ha
+        expirado o se necesita repetir el envío.
+    </p>
+</section>
+
+<section>
+    <h2>Expiración automática</h2>
+
+    <p>
+        El módulo incluye una acción programada que revisa periódicamente las
+        solicitudes enviadas.
+    </p>
+
+    <p>
+        Si una solicitud supera su fecha de expiración sin haber sido respondida,
+        el sistema cambia automáticamente su estado a expirado y actualiza el
+        estado LOPD del contacto correspondiente.
+    </p>
+
+    <p>
+        Esto evita tener solicitudes antiguas abiertas indefinidamente y permite
+        mantener un control operativo claro.
+    </p>
+</section>
+
+<section>
+    <h2>Actualización automática del contacto</h2>
+
+    <p>
+        Cuando el cliente completa el formulario, los datos recibidos se guardan
+        en la solicitud y se actualiza la ficha del contacto en Odoo.
+    </p>
+
+    <p>
+        El módulo puede actualizar datos como nombre, empresa, email, teléfono,
+        dirección, país, provincia y datos fiscales.
+    </p>
+
+    <p>
+        En caso de que algún dato requiera revisión manual, el contacto puede
+        quedar marcado en estado pendiente de revisión.
+    </p>
+</section>
+
+<section>
+    <h2>Historial y trazabilidad</h2>
+
+    <p>
+        ServiLOPD utiliza el historial de Odoo para registrar eventos relevantes
+        en la ficha del contacto.
+    </p>
+
+    <p>
+        Algunos eventos que pueden quedar registrados son:
+    </p>
+
+    <ul>
+        <li>Formulario LOPD enviado</li>
+        <li>Formulario reenviado</li>
+        <li>Formulario respondido</li>
+        <li>Solicitud expirada</li>
+        <li>Aceptación recibida desde formulario web</li>
+        <li>Incidencias o datos pendientes de revisión</li>
+    </ul>
+
+    <p>
+        Esto facilita el seguimiento interno por parte del equipo comercial,
+        administrativo o de cumplimiento.
+    </p>
+</section>
+
+<section>
+    <h2>Smart button en contactos</h2>
+
+    <p>
+        En la ficha del cliente o proveedor se incorpora un acceso directo a
+        sus solicitudes LOPD.
+    </p>
+
+    <p>
+        Este botón permite consultar rápidamente todas las solicitudes asociadas
+        al contacto, su estado, fechas, documento aceptado e información de
+        trazabilidad.
+    </p>
+</section>
+
+<section>
+    <h2>Vista visual de estados</h2>
+
+    <p>
+        En la vista lista de contactos, el módulo puede aplicar indicadores
+        visuales según el estado LOPD del cliente o proveedor.
+    </p>
+
+    <p>
+        Esto permite identificar de forma rápida qué contactos han firmado, qué
+        contactos tienen solicitudes enviadas, cuáles requieren revisión y cuáles
+        no tienen el proceso completado.
+    </p>
+</section>
+
+<section>
+    <h2>Ventajas principales</h2>
+
+    <ul>
+        <li>Integración completa con clientes y proveedores de Odoo.</li>
+        <li>Reducción del trabajo manual asociado a solicitudes LOPD.</li>
+        <li>Envío individual y masivo de formularios.</li>
+        <li>Formulario web seguro mediante token único.</li>
+        <li>Gestión de documentos LOPD versionados.</li>
+        <li>Registro de aceptación con fecha, IP y versión legal.</li>
+        <li>Actualización automática de datos del contacto.</li>
+        <li>Control de expiración de enlaces.</li>
+        <li>Reenvío de solicitudes.</li>
+        <li>Historial de eventos en el contacto.</li>
+        <li>Acceso rápido a solicitudes desde la ficha del cliente.</li>
+    </ul>
+</section>
+
+<section>
+    <h2>Futuras ampliaciones recomendadas</h2>
+
+    <p>
+        La arquitectura del módulo permite incorporar nuevas funcionalidades en
+        futuras versiones.
+    </p>
+
+    <ul>
+        <li>Generación automática de PDF legal de aceptación.</li>
+        <li>Firma manuscrita digital.</li>
+        <li>Recordatorios automáticos.</li>
+        <li>Dashboard de cumplimiento LOPD.</li>
+        <li>Bloqueo de edición tras firma.</li>
+        <li>Hash del documento aceptado.</li>
+        <li>Exportación de evidencias de aceptación.</li>
+        <li>Portal de cliente.</li>
+    </ul>
+</section>
+
+</body>
+</html>

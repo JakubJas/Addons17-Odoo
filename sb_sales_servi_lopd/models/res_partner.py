@@ -18,16 +18,24 @@ class ResPartner(models.Model):
         string='Solicitudes LOPD',
     )
 
-    # lopd_last_request_id = fields.Many2one(
-    #     comodel_name='servilopd.request',
-    #     string='Última solicitud LOPD',
-    #     readonly=True,
-    # )
+    lopd_request_count = fields.Integer(
+        string='Solicitudes LOPD',
+        compute='_compute_lopd_request_count'
+    )
 
-    # lopd_last_request_date = fields.Datetime(
-    #     string='Fecha última solicitud',
-    #     readonly=True,
-    # )
+    lopd_request_ids = fields.One2many(
+        'servilopd.request',
+        'partner_id',
+        string='Solicitudes LOPD'
+    )
+
+    def _compute_lopd_request_count(self):
+        for partner in self:
+            partner.lopd_request_count = self.env[
+                'servilopd.request'
+            ].search_count([
+                ('partner_id', '=', partner.id)
+            ])
 
     def action_send_lopd_request(self):
         for partner in self:
@@ -66,3 +74,17 @@ class ResPartner(models.Model):
             partner.message_post(
                 body="Formulario LOPD enviado al cliente."
             )
+            
+    def action_view_lopd_requests(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Solicitudes LOPD',
+            'res_model': 'servilopd.request',
+            'view_mode': 'tree,form',
+            'domain': [('partner_id', '=', self.id)],
+            'context': {
+                'default_partner_id': self.id,
+            }
+        }
