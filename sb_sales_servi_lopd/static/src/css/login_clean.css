@@ -25,3 +25,25 @@ body:has(form[action="/web/login"]) .oe_website_login_container {
     max-height: 180px;
     object-fit: contain;
 }
+
+body:has(form[action="/web/login"]) .oe_login_form {
+    max-width: 360px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+body:has(form[action="/web/login"]) .oe_website_login_container {
+    width: 100% !important;
+    max-width: 420px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+body:has(form[action="/web/login"]) form {
+    width: 100% !important;
+}
+
+body:has(form[action="/web/login"]) main {
+    display: flex !important;
+    justify-content: center !important;
+}

@@ -7,6 +7,10 @@ class ServilopdController(http.Controller):
 
     @http.route('/', type='http', auth='public', website=True)
     def redirect_home_to_login(self, **kwargs):
+
+        if request.session.uid:
+            return request.redirect('/web')
+
         return request.redirect('/web/login')
     
     @http.route(
@@ -90,7 +94,14 @@ class ServilopdController(http.Controller):
         if lopd_request.token_expiration and lopd_request.token_expiration < fields.Datetime.now():
             return request.render('sb_sales_servi_lopd.token_expired')
 
-        ip = request.httprequest.remote_addr
+        headers = request.httprequest.headers
+
+        ip = (
+            headers.get('CF-Connecting-IP')
+            or headers.get('X-Real-IP')
+            or headers.get('X-Forwarded-For', '').split(',')[0].strip()
+            or request.httprequest.remote_addr
+        )
 
         state_id = int(post.get('state_id')) if post.get('state_id') else False
         country_id = int(post.get('country_id')) if post.get('country_id') else False
