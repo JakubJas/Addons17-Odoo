@@ -1,19 +1,43 @@
-body:has(form[action="/web/login"]) header,
-body:has(form[action="/web/login"]) footer,
-body:has(form[action="/web/login"]) .o_footer,
-body:has(form[action="/web/login"]) #top,
-body:has(form[action="/web/login"]) .navbar {
+/* Ocultar cabecera y pie solo en login */
+body:has(.oe_login_form) header,
+body:has(.oe_login_form) footer,
+body:has(.oe_login_form) .o_footer,
+body:has(.oe_login_form) #top,
+body:has(.oe_login_form) .navbar {
     display: none !important;
 }
 
-body:has(form[action="/web/login"]) main {
+/* Contenedor general */
+body:has(.oe_login_form) main {
+    min-height: 100vh !important;
     padding-top: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
 }
 
-body:has(form[action="/web/login"]) .oe_website_login_container {
-    margin-top: 60px !important;
+/* Caja del login */
+body:has(.oe_login_form) .oe_website_login_container {
+    width: 100% !important;
+    max-width: 420px !important;
+    margin: 80px auto 0 auto !important;
+    padding: 0 !important;
 }
 
+/* Formulario */
+body:has(.oe_login_form) .oe_login_form {
+    width: 100% !important;
+    max-width: 420px !important;
+    margin: 0 auto !important;
+}
+
+/* Inputs y botón */
+body:has(.oe_login_form) .oe_login_form input,
+body:has(.oe_login_form) .oe_login_form button {
+    width: 100% !important;
+}
+
+/* Logo */
 .custom_login_logo_container {
     width: 100%;
     text-align: center;
@@ -24,26 +48,4 @@ body:has(form[action="/web/login"]) .oe_website_login_container {
     max-width: 220px;
     max-height: 180px;
     object-fit: contain;
-}
-
-body:has(form[action="/web/login"]) .oe_login_form {
-    max-width: 360px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-}
-
-body:has(form[action="/web/login"]) .oe_website_login_container {
-    width: 100% !important;
-    max-width: 420px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-}
-
-body:has(form[action="/web/login"]) form {
-    width: 100% !important;
-}
-
-body:has(form[action="/web/login"]) main {
-    display: flex !important;
-    justify-content: center !important;
 }
