@@ -1,10 +1,11 @@
 import base64
+import json
 from odoo import http, fields
-from odoo.http import request
+from odoo.http import request, Response
 
 
 class ServilopdController(http.Controller):
-
+ 
     @http.route('/', type='http', auth='public', website=True)
     def redirect_home_to_login(self, **kwargs):
 
@@ -177,3 +178,54 @@ class ServilopdController(http.Controller):
                 ('Content-Disposition', f'inline; filename="{filename}"'),
             ]
         )
+        
+    @http.route('/lopd/form/preview', type='http', auth='public', website=True, csrf=False)
+    def lopd_form_preview(self, **post):
+        token = post.get('token')
+
+        lopd_request = request.env['servilopd.request'].sudo().search([
+            ('token', '=', token)
+        ], limit=1)
+
+        if not lopd_request:
+            return "Token inválido"
+
+        return request.render('sb_sales_servi_lopd.lopd_contract_preview', {
+            'request_record': lopd_request,
+            'post': post,
+        })
+        
+    @http.route('/lopd/form/confirm', type='http', auth='public', website=True, csrf=False)
+    def lopd_form_confirm(self, **post):
+
+        token = post.get('token')
+
+        lopd_request = request.env['servilopd.request'].sudo().search([
+            ('token', '=', token)
+        ], limit=1)
+
+        if not lopd_request:
+            return Response(
+                json.dumps({
+                    'success': False,
+                    'error': 'Token inválido'
+                }),
+                content_type='application/json'
+            )
+
+        # Aquí irá luego:
+        # - guardar partner
+        # - guardar solicitud
+        # - generar contrato
+        # - enviar email
+
+        return Response(
+            json.dumps({
+                'success': True
+            }),
+            content_type='application/json'
+        )
+            
+        @http.route('/lopd/form/success', type='http', auth='public', website=True)
+        def lopd_form_success(self, **kwargs):
+            return request.render('sb_sales_servi_lopd.lopd_success_page')

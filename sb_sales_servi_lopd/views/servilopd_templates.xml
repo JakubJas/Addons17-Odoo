@@ -196,13 +196,52 @@
                                         </label>
                                     </div>
 
-                                    <div class="d-grid">
-                                        <button type="submit" class="btn btn-primary btn-lg">
-                                            Enviar datos
-                                        </button>
-                                    </div>
+                                    <button type="button"
+                                            id="btn_preview_contract"
+                                            class="btn btn-primary btn-lg">
+                                        Previsualizar contrato
+                                    </button>
+
+                                    <button type="submit"
+                                            id="btn_submit_final"
+                                            class="btn btn-success btn-lg d-none">
+                                        Aceptar y enviar
+                                    </button>
 
                                 </form>
+
+                                <div class="modal fade" id="contractPreviewModal" tabindex="-1">
+                                    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                                        <div class="modal-content">
+
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Previsualización del contrato LOPD</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"/>
+                                            </div>
+
+                                            <div class="modal-body">
+                                                <div id="contract_preview_content">
+                                                    Cargando previsualización...
+                                                </div>
+                                            </div>
+
+                                            <div class="modal-footer">
+                                                <button type="button"
+                                                        class="btn btn-secondary"
+                                                        data-bs-dismiss="modal">
+                                                    Volver y corregir
+                                                </button>
+
+                                                <button type="button"
+                                                        id="btn_confirm_preview"
+                                                        class="btn btn-success">
+                                                    Confirmar y enviar
+                                                </button>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="card-footer text-muted small">
@@ -264,6 +303,95 @@
 
             });
             </script>
+            <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const previewButton = document.getElementById('btn_preview_contract');
+                const confirmButton = document.getElementById('btn_confirm_preview');
+                const submitButton = document.getElementById('btn_submit_final');
+                const form = document.querySelector('form[action="/lopd/form/submit"]');
+                const previewContent = document.getElementById('contract_preview_content');
+
+                if (!previewButton || !confirmButton || !submitButton || !form || !previewContent) {
+                    return;
+                }
+
+                function openPreviewModal() {
+                    const modal = document.getElementById('contractPreviewModal');
+                    modal.classList.add('show');
+                    modal.style.display = 'block';
+                    modal.removeAttribute('aria-hidden');
+                    modal.setAttribute('aria-modal', 'true');
+
+                    document.body.classList.add('modal-open');
+
+                    let backdrop = document.createElement('div');
+                    backdrop.className = 'modal-backdrop fade show';
+                    backdrop.id = 'contractPreviewBackdrop';
+                    document.body.appendChild(backdrop);
+                }
+
+                function closePreviewModal() {
+                    const modal = document.getElementById('contractPreviewModal');
+                    const backdrop = document.getElementById('contractPreviewBackdrop');
+
+                    if (modal) {
+                        modal.classList.remove('show');
+                        modal.style.display = 'none';
+                        modal.removeAttribute('aria-modal');
+                        modal.setAttribute('aria-hidden', 'true');
+                    }
+
+                    if (backdrop) {
+                        backdrop.remove();
+                    }
+
+                    document.body.classList.remove('modal-open');
+                }
+
+                document.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (button) {
+                    button.addEventListener('click', closePreviewModal);
+                });
+
+                previewButton.addEventListener('click', function () {
+                    if (!form.reportValidity()) {
+                        return;
+                    }
+
+                    const formData = new FormData(form);
+
+                    fetch('/lopd/form/preview', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.text())
+                    .then(html => {
+                        previewContent.innerHTML = html;
+                        openPreviewModal();
+                    });
+                });
+
+                confirmButton.addEventListener('click', function () {
+
+                    const formData = new FormData(form);
+
+                    fetch('/lopd/form/confirm', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+
+                        if (result.success) {
+                            window.location.href = '/lopd/form/success';
+                        } else {
+                            alert(result.error || 'Error al enviar el formulario');
+                        }
+
+                    });
+
+                });
+            });
+            </script>
         </t>
     </template>
 
@@ -301,6 +429,62 @@
             <div class="container mt-5">
                 <h2>Formulario ya enviado</h2>
                 <p>Este formulario ya fue completado anteriormente.</p>
+            </div>
+        </t>
+    </template>
+
+    <template id="lopd_contract_preview" name="Preview contrato LOPD">
+        <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #222;">
+
+            <h3 style="text-align:center;">
+                CONTRATO DE TRATAMIENTO DE DATOS PERSONALES POR CUENTA DE TERCEROS
+            </h3>
+
+            <p>
+                De una parte,
+                <strong><t t-esc="post.get('company_name')"/></strong>,
+                con CIF/NIF/NIE
+                <strong><t t-esc="post.get('vat')"/></strong>,
+                y domicilio en
+                <strong><t t-esc="post.get('street')"/></strong>,
+                Código Postal
+                <strong><t t-esc="post.get('zip')"/></strong>,
+                en
+                <strong><t t-esc="post.get('city')"/></strong>.
+            </p>
+
+            <p>
+                Representada por
+                <strong><t t-esc="post.get('fullname')"/></strong>,
+                con email
+                <strong><t t-esc="post.get('email')"/></strong>.
+            </p>
+
+            <p>
+                El cliente declara que los datos indicados son correctos y que ha leído
+                y acepta el documento LOPD correspondiente.
+            </p>
+
+            <hr/>
+
+            <p>
+                Esta es una previsualización. Si los datos son correctos, pulsa
+                <strong>Confirmar y enviar</strong>.
+            </p>
+
+        </div>
+    </template>
+
+    <template id="lopd_success_page">
+        <t t-call="website.layout">
+            <div class="container mt-5 text-center">
+
+                <h2>Contrato enviado correctamente</h2>
+
+                <p>
+                    Hemos recibido y procesado correctamente su documentación.
+                </p>
+
             </div>
         </t>
     </template>
