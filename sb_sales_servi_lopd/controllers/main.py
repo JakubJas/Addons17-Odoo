@@ -197,34 +197,107 @@ class ServilopdController(http.Controller):
         
     @http.route('/lopd/form/confirm', type='http', auth='public', website=True, csrf=False)
     def lopd_form_confirm(self, **post):
-
         token = post.get('token')
+        CURRENT_LOPD_VERSION = 'v1.0'
 
         lopd_request = request.env['servilopd.request'].sudo().search([
             ('token', '=', token)
         ], limit=1)
 
         if not lopd_request:
-            return Response(
-                json.dumps({
+            return Response(json.dumps({
+                'success': False,
+                'error': 'Token inválido'
+            }), content_type='application/json')
+
+        if lopd_request.state == 'answered':
+            return Response(json.dumps({
+                'success': False,
+                'error': 'Este formulario ya fue enviado anteriormente.'
+            }), content_type='application/json')
+
+        if lopd_request.token_expiration and lopd_request.token_expiration < fields.Datetime.now():
+            return Response(json.dumps({
+                'success': False,
+                'error': 'El enlace ha expirado.'
+            }), content_type='application/json')
+
+        required_fields = {
+            'company_name': 'Nombre empresa',
+            'fullname': 'Nombre completo',
+            'email': 'Email',
+            'vat': 'CIF/NIF/NIE',
+        }
+
+        for field, label in required_fields.items():
+            if not post.get(field):
+                return Response(json.dumps({
                     'success': False,
-                    'error': 'Token inválido'
-                }),
-                content_type='application/json'
-            )
+                    'error': f'El campo {label} es obligatorio.'
+                }), content_type='application/json')
 
-        # Aquí irá luego:
-        # - guardar partner
-        # - guardar solicitud
-        # - generar contrato
-        # - enviar email
-
-        return Response(
-            json.dumps({
-                'success': True
-            }),
-            content_type='application/json'
+        headers = request.httprequest.headers
+        ip = (
+            headers.get('CF-Connecting-IP')
+            or headers.get('X-Real-IP')
+            or headers.get('X-Forwarded-For', '').split(',')[0].strip()
+            or request.httprequest.remote_addr
         )
+
+        country_id = int(post.get('country_id')) if post.get('country_id') else False
+        state_id = int(post.get('state_id')) if post.get('state_id') else False
+
+        vat = post.get('vat')
+        if vat:
+            vat = vat.strip().upper()
+
+        lopd_request.write({
+            'company_name': post.get('company_name'),
+            'fullname': post.get('fullname'),
+            'email': post.get('email'),
+            'vat': vat,
+            'phone': post.get('phone'),
+            'mobile': post.get('mobile'),
+            'street': post.get('street'),
+            'zip': post.get('zip'),
+            'city': post.get('city'),
+            'state_id': state_id or False,
+            'country_id': country_id or False,
+            'lopd_accepted': True,
+            'lopd_accepted_date': fields.Datetime.now(),
+            'lopd_accept_ip': ip,
+            'state': 'answered',
+            'response_date': fields.Datetime.now(),
+            'lopd_version': lopd_request.document_id.version if lopd_request.document_id else CURRENT_LOPD_VERSION,
+        })
+
+        partner_vals = {
+            'lopd_state': 'signed',
+            'company_name': post.get('company_name') or lopd_request.partner_id.company_name,
+            'name': post.get('fullname') or lopd_request.partner_id.name,
+            'phone': post.get('phone') or lopd_request.partner_id.phone,
+            'mobile': post.get('mobile') or lopd_request.partner_id.mobile,
+            'email': post.get('email') or lopd_request.partner_id.email,
+            'street': post.get('street') or lopd_request.partner_id.street,
+            'zip': post.get('zip') or lopd_request.partner_id.zip,
+            'city': post.get('city') or lopd_request.partner_id.city,
+            'state_id': state_id or lopd_request.partner_id.state_id.id,
+            'country_id': country_id or lopd_request.partner_id.country_id.id,
+            'vat': vat or lopd_request.partner_id.vat,
+        }
+
+        lopd_request.partner_id.sudo().with_context(
+            no_vat_validation=True
+        ).write(partner_vals)
+
+        lopd_request.partner_id.sudo().message_post(
+            body="Cliente aceptó la LOPD desde formulario web.",
+            subtype_xmlid="mail.mt_note",
+        )
+
+        return Response(json.dumps({
+            'success': True,
+        }), content_type='application/json')
             
     @http.route('/lopd/form/success', type='http', auth='public', website=True)
     def lopd_form_success(self, **kwargs):
