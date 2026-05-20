@@ -226,6 +226,6 @@ class ServilopdController(http.Controller):
             content_type='application/json'
         )
             
-        @http.route('/lopd/form/success', type='http', auth='public', website=True)
-        def lopd_form_success(self, **kwargs):
-            return request.render('sb_sales_servi_lopd.lopd_success_page')
+    @http.route('/lopd/form/success', type='http', auth='public', website=True)
+    def lopd_form_success(self, **kwargs):
+        return request.render('sb_sales_servi_lopd.lopd_success_page')
