@@ -1,6 +1,10 @@
 import secrets
+import base64
+import tempfile
+import os
 from datetime import timedelta
 from odoo import models, fields, api
+from docxtpl import DocxTemplate
 
 class ServilopdRequest(models.Model):
     _name = 'servilopd.request'
@@ -110,6 +114,28 @@ class ServilopdRequest(models.Model):
         'servilopd.document',
         string='Documento LOPD'
     )
+    
+    contract_docx = fields.Binary(
+        string='Contrato DOCX generado',
+        attachment=True,
+        readonly=True,
+    )
+
+    contract_docx_filename = fields.Char(
+        string='Nombre contrato DOCX',
+        readonly=True,
+    )
+
+    contract_pdf = fields.Binary(
+        string='Contrato PDF generado',
+        attachment=True,
+        readonly=True,
+    )
+
+    contract_pdf_filename = fields.Char(
+        string='Nombre contrato PDF',
+        readonly=True,
+    )
 
     @api.model
     def create(self, vals):
@@ -189,3 +215,50 @@ class ServilopdRequest(models.Model):
             record.partner_id.message_post(
                 body="La solicitud LOPD expiró automáticamente."
             )
+            
+    def generate_contract_docx(self):
+        self.ensure_one()
+
+        if not self.document_id or not self.document_id.file:
+            return False
+
+        template_content = base64.b64decode(self.document_id.file)
+
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as template_file:
+            template_file.write(template_content)
+            template_path = template_file.name
+
+        output_path = template_path.replace('.docx', '_generated.docx')
+
+        doc = DocxTemplate(template_path)
+
+        context = {
+            'fecha_contrato': fields.Date.today().strftime('%d/%m/%Y'),
+            'cliente_nombre': self.company_name or self.partner_id.company_name or self.partner_id.name or '',
+            'cliente_representante': self.fullname or self.partner_id.name or '',
+            'cliente_vat': self.vat or self.partner_id.vat or '',
+            'cliente_email': self.email or self.partner_id.email or '',
+            'cliente_direccion': self.street or self.partner_id.street or '',
+            'cliente_cp': self.zip or self.partner_id.zip or '',
+            'cliente_ciudad': self.city or self.partner_id.city or '',
+            'cliente_provincia': self.state_id.name or self.partner_id.state_id.name or '',
+            'cliente_pais': self.country_id.name or self.partner_id.country_id.name or '',
+        }
+
+        doc.render(context)
+        doc.save(output_path)
+
+        with open(output_path, 'rb') as generated_file:
+            generated_content = generated_file.read()
+
+        filename = f"Contrato_LOPD_{self.partner_id.name or 'cliente'}.docx"
+
+        self.write({
+            'contract_docx': base64.b64encode(generated_content),
+            'contract_docx_filename': filename,
+        })
+
+        os.unlink(template_path)
+        os.unlink(output_path)
+
+        return True

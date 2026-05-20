@@ -49,6 +49,14 @@
                         <field name="response_date" readonly="1"/>
                         <field name="lopd_accept_ip" readonly="1"/>
                     </group>
+
+                    <group string="Contrato generado">
+                        <field name="contract_docx" filename="contract_docx_filename" readonly="1"/>
+                        <field name="contract_docx_filename" invisible="1"/>
+
+                        <field name="contract_pdf" filename="contract_pdf_filename" readonly="1"/>
+                        <field name="contract_pdf_filename" invisible="1"/>
+                    </group>
                 </sheet>
             </form>
         </field>

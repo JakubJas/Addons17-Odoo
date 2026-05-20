@@ -19,13 +19,13 @@ class ServilopdDocument(models.Model):
     )
 
     file = fields.Binary(
-        string='Archivo PDF',
+        string='Plantilla DOCX',
         required=True,
         attachment=True,
     )
 
     filename = fields.Char(
-        string='Nombre archivo',
+        string='Nombre archivo plantilla',
     )
 
     active = fields.Boolean(

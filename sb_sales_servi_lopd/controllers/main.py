@@ -295,6 +295,8 @@ class ServilopdController(http.Controller):
             subtype_xmlid="mail.mt_note",
         )
 
+        lopd_request.generate_contract_docx()
+
         return Response(json.dumps({
             'success': True,
         }), content_type='application/json')
