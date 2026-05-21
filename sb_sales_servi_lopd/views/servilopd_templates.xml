@@ -214,21 +214,18 @@
                                     <div class="modal-dialog modal-xl modal-dialog-scrollable">
                                         <div class="modal-content">
 
-                                            <div class="modal-body text-center">
-                                                <p>
-                                                    Se ha generado una vista previa del contrato con los datos introducidos.
-                                                </p>
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Vista previa del contrato LOPD</h5>
+                                                <button type="button"
+                                                        class="btn-close"
+                                                        data-bs-dismiss="modal">
+                                                </button>
+                                            </div>
 
-                                                <a id="contract_preview_download"
-                                                href="#"
-                                                target="_blank"
-                                                class="btn btn-primary">
-                                                    Descargar vista previa DOCX
-                                                </a>
-
-                                                <p class="text-muted mt-3">
-                                                    Revisa el documento. Si los datos son correctos, pulsa confirmar.
-                                                </p>
+                                            <div class="modal-body">
+                                                <iframe id="contract_preview_iframe"
+                                                        style="width:100%; height:750px; border:none;">
+                                                </iframe>
                                             </div>
 
                                             <div class="modal-footer">
@@ -315,9 +312,9 @@
                 const confirmButton = document.getElementById('btn_confirm_preview');
                 const submitButton = document.getElementById('btn_submit_final');
                 const form = document.querySelector('form[action="/lopd/form/submit"]');
-                const previewContent = document.getElementById('contract_preview_content');
+                const iframe = document.getElementById('contract_preview_iframe');
 
-                if (!previewButton || !confirmButton || !submitButton || !form || !previewContent) {
+                if (!previewButton || !confirmButton || !submitButton || !form || !iframe) {
                     return;
                 }
 
@@ -376,8 +373,7 @@
                             return;
                         }
 
-                        const downloadButton = document.getElementById('contract_preview_download');
-                        downloadButton.href = result.preview_url;
+                        iframe.src = result.preview_url;
 
                         openPreviewModal();
                     });
@@ -449,7 +445,7 @@
     <template id="lopd_contract_preview" name="Preview contrato LOPD">
         <div class="modal-body">
             <iframe id="contract_preview_iframe"
-                    style="width:100%; height:700px; border:none;">
+                    style="width:100%; height:750px; border:none;">
             </iframe>
         </div>
     </template>

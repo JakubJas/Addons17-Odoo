@@ -335,6 +335,23 @@ class ServilopdRequest(models.Model):
         })
 
         return True
+    
+    def generate_contract_pdf_qweb(self):
+        self.ensure_one()
+
+        pdf_content, _ = self.env['ir.actions.report'].sudo()._render_qweb_pdf(
+            'sb_sales_servi_lopd.action_report_servilopd_contract',
+            [self.id]
+        )
+
+        filename = f"Contrato_LOPD_{self.partner_id.name or 'cliente'}.pdf"
+
+        self.write({
+            'contract_pdf': base64.b64encode(pdf_content),
+            'contract_pdf_filename': filename,
+        })
+
+        return True
 
 
     def generate_contract_pdf(self):
@@ -376,3 +393,43 @@ class ServilopdRequest(models.Model):
         })
 
         return True
+    
+    def action_send_final_contract_email(self):
+        for record in self:
+
+            if not record.email:
+                continue
+
+            if not record.contract_pdf:
+                continue
+
+            attachment = self.env['ir.attachment'].sudo().create({
+                'name': record.contract_pdf_filename or 'Contrato_LOPD.pdf',
+                'type': 'binary',
+                'datas': record.contract_pdf,
+                'res_model': record._name,
+                'res_id': record.id,
+                'mimetype': 'application/pdf',
+            })
+
+            template = self.env.ref(
+                'sb_sales_servi_lopd.mail_template_lopd_contract_final',
+                raise_if_not_found=False
+            )
+
+            if template:
+                template.attachment_ids = [(6, 0, [attachment.id])]
+                template.send_mail(record.id, force_send=True)
+                template.attachment_ids = [(5, 0, 0)]
+
+            record.message_post(
+                body="Contrato LOPD PDF generado automáticamente.",
+                attachment_ids=[attachment.id],
+                subtype_xmlid="mail.mt_note",
+            )
+
+            record.partner_id.sudo().message_post(
+                body="Contrato LOPD PDF firmado automáticamente.",
+                attachment_ids=[attachment.id],
+                subtype_xmlid="mail.mt_note",
+            )

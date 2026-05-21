@@ -6,11 +6,13 @@ class ResPartner(models.Model):
     _inherit = 'res.partner'
 
     lopd_state = fields.Selection([
+        ('not_sent', 'No enviado'),
         ('pending_send', 'Pdte. envío'),
         ('sent', 'Enviado'),
         ('signed', 'Firmado'),
+        ('expired', 'Expirado'),
         ('pending_review', 'Pdte. revisión'),
-    ], string='Estado LOPD', default='pending_send')
+    ], string='Estado LOPD', default='not_sent', readonly=True)
 
     lopd_request_ids = fields.One2many(
         comodel_name='servilopd.request',

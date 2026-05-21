@@ -196,25 +196,36 @@ class ServilopdController(http.Controller):
                 'error': 'Token inválido'
             }), content_type='application/json')
 
-        generated_docx = lopd_request._render_contract_docx_content(post)
+        lopd_request.sudo().write({
+            'company_name': post.get('company_name'),
+            'fullname': post.get('fullname'),
+            'email': post.get('email'),
+            'vat': post.get('vat'),
+            'phone': post.get('phone'),
+            'mobile': post.get('mobile'),
+            'street': post.get('street'),
+            'zip': post.get('zip'),
+            'city': post.get('city'),
+            'state_id': int(post.get('state_id')) if post.get('state_id') else False,
+            'country_id': int(post.get('country_id')) if post.get('country_id') else False,
+        })
 
-        if not generated_docx:
-            return Response(json.dumps({
-                'success': False,
-                'error': 'No hay plantilla DOCX asociada.'
-            }), content_type='application/json')
+        pdf_content, _ = request.env['ir.actions.report'].sudo()._render_qweb_pdf(
+            'sb_sales_servi_lopd.action_report_servilopd_contract',
+            [lopd_request.id]
+        )
 
         attachment = request.env['ir.attachment'].sudo().create({
-            'name': 'preview_contrato_lopd.docx',
+            'name': 'preview_contrato_lopd.pdf',
             'type': 'binary',
-            'datas': base64.b64encode(generated_docx),
-            'mimetype': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'datas': base64.b64encode(pdf_content),
+            'mimetype': 'application/pdf',
             'public': True,
         })
 
         return Response(json.dumps({
             'success': True,
-            'preview_url': f'/web/content/{attachment.id}?download=true'
+            'preview_url': f'/web/content/{attachment.id}?download=false'
         }), content_type='application/json')
         
     @http.route('/lopd/form/confirm', type='http', auth='public', website=True, csrf=False)
@@ -317,7 +328,8 @@ class ServilopdController(http.Controller):
             subtype_xmlid="mail.mt_note",
         )
 
-        lopd_request.generate_contract_docx()
+        lopd_request.generate_contract_pdf_qweb()
+        lopd_request.action_send_final_contract_email()
 
         return Response(json.dumps({
             'success': True,
