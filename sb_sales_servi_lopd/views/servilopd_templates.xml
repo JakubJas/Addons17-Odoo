@@ -214,15 +214,21 @@
                                     <div class="modal-dialog modal-xl modal-dialog-scrollable">
                                         <div class="modal-content">
 
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Previsualización del contrato LOPD</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal"/>
-                                            </div>
+                                            <div class="modal-body text-center">
+                                                <p>
+                                                    Se ha generado una vista previa del contrato con los datos introducidos.
+                                                </p>
 
-                                            <div class="modal-body">
-                                                <div id="contract_preview_content">
-                                                    Cargando previsualización...
-                                                </div>
+                                                <a id="contract_preview_download"
+                                                href="#"
+                                                target="_blank"
+                                                class="btn btn-primary">
+                                                    Descargar vista previa DOCX
+                                                </a>
+
+                                                <p class="text-muted mt-3">
+                                                    Revisa el documento. Si los datos son correctos, pulsa confirmar.
+                                                </p>
                                             </div>
 
                                             <div class="modal-footer">
@@ -359,13 +365,20 @@
 
                     const formData = new FormData(form);
 
-                    fetch('/lopd/form/preview', {
+                   fetch('/lopd/form/preview', {
                         method: 'POST',
                         body: formData
                     })
-                    .then(response => response.text())
-                    .then(html => {
-                        previewContent.innerHTML = html;
+                    .then(response => response.json())
+                    .then(result => {
+                        if (!result.success) {
+                            alert(result.error || 'No se pudo generar la previsualización.');
+                            return;
+                        }
+
+                        const downloadButton = document.getElementById('contract_preview_download');
+                        downloadButton.href = result.preview_url;
+
                         openPreviewModal();
                     });
                 });
@@ -434,44 +447,10 @@
     </template>
 
     <template id="lopd_contract_preview" name="Preview contrato LOPD">
-        <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #222;">
-
-            <h3 style="text-align:center;">
-                CONTRATO DE TRATAMIENTO DE DATOS PERSONALES POR CUENTA DE TERCEROS
-            </h3>
-
-            <p>
-                De una parte,
-                <strong><t t-esc="post.get('company_name')"/></strong>,
-                con CIF/NIF/NIE
-                <strong><t t-esc="post.get('vat')"/></strong>,
-                y domicilio en
-                <strong><t t-esc="post.get('street')"/></strong>,
-                Código Postal
-                <strong><t t-esc="post.get('zip')"/></strong>,
-                en
-                <strong><t t-esc="post.get('city')"/></strong>.
-            </p>
-
-            <p>
-                Representada por
-                <strong><t t-esc="post.get('fullname')"/></strong>,
-                con email
-                <strong><t t-esc="post.get('email')"/></strong>.
-            </p>
-
-            <p>
-                El cliente declara que los datos indicados son correctos y que ha leído
-                y acepta el documento LOPD correspondiente.
-            </p>
-
-            <hr/>
-
-            <p>
-                Esta es una previsualización. Si los datos son correctos, pulsa
-                <strong>Confirmar y enviar</strong>.
-            </p>
-
+        <div class="modal-body">
+            <iframe id="contract_preview_iframe"
+                    style="width:100%; height:700px; border:none;">
+            </iframe>
         </div>
     </template>
 

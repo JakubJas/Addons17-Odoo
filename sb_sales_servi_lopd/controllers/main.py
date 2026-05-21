@@ -1,5 +1,8 @@
 import base64
 import json
+import os
+import tempfile
+
 from odoo import http, fields
 from odoo.http import request, Response
 
@@ -188,12 +191,31 @@ class ServilopdController(http.Controller):
         ], limit=1)
 
         if not lopd_request:
-            return "Token inválido"
+            return Response(json.dumps({
+                'success': False,
+                'error': 'Token inválido'
+            }), content_type='application/json')
 
-        return request.render('sb_sales_servi_lopd.lopd_contract_preview', {
-            'request_record': lopd_request,
-            'post': post,
+        generated_docx = lopd_request._render_contract_docx_content(post)
+
+        if not generated_docx:
+            return Response(json.dumps({
+                'success': False,
+                'error': 'No hay plantilla DOCX asociada.'
+            }), content_type='application/json')
+
+        attachment = request.env['ir.attachment'].sudo().create({
+            'name': 'preview_contrato_lopd.docx',
+            'type': 'binary',
+            'datas': base64.b64encode(generated_docx),
+            'mimetype': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'public': True,
         })
+
+        return Response(json.dumps({
+            'success': True,
+            'preview_url': f'/web/content/{attachment.id}?download=true'
+        }), content_type='application/json')
         
     @http.route('/lopd/form/confirm', type='http', auth='public', website=True, csrf=False)
     def lopd_form_confirm(self, **post):

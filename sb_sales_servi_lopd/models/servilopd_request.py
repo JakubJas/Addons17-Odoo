@@ -2,6 +2,7 @@ import secrets
 import base64
 import tempfile
 import os
+
 from datetime import timedelta
 from odoo import models, fields, api
 from docxtpl import DocxTemplate
@@ -260,5 +261,118 @@ class ServilopdRequest(models.Model):
 
         os.unlink(template_path)
         os.unlink(output_path)
+
+        return True
+    
+    def _get_contract_context(self, data=None):
+        self.ensure_one()
+        data = data or {}
+
+        country = self.env['res.country'].sudo().browse(
+            int(data.get('country_id')) if data.get('country_id') else self.country_id.id
+        )
+
+        state = self.env['res.country.state'].sudo().browse(
+            int(data.get('state_id')) if data.get('state_id') else self.state_id.id
+        )
+
+        return {
+            'fecha_contrato': fields.Date.today().strftime('%d/%m/%Y'),
+
+            'cliente_nombre': data.get('company_name') or self.company_name or self.partner_id.company_name or self.partner_id.name or '',
+            'cliente_representante': data.get('fullname') or self.fullname or self.partner_id.name or '',
+            'cliente_vat': data.get('vat') or self.vat or self.partner_id.vat or '',
+            'cliente_email': data.get('email') or self.email or self.partner_id.email or '',
+
+            'cliente_direccion': data.get('street') or self.street or self.partner_id.street or '',
+            'cliente_cp': data.get('zip') or self.zip or self.partner_id.zip or '',
+            'cliente_ciudad': data.get('city') or self.city or self.partner_id.city or '',
+            'cliente_provincia': state.name or self.partner_id.state_id.name or '',
+            'cliente_pais': country.name or self.partner_id.country_id.name or '',
+        }
+
+
+    def _render_contract_docx_content(self, data=None):
+        self.ensure_one()
+
+        if not self.document_id or not self.document_id.file:
+            return False
+
+        template_content = base64.b64decode(self.document_id.file)
+
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as template_file:
+            template_file.write(template_content)
+            template_path = template_file.name
+
+        output_path = template_path.replace('.docx', '_generated.docx')
+
+        doc = DocxTemplate(template_path)
+        doc.render(self._get_contract_context(data))
+        doc.save(output_path)
+
+        with open(output_path, 'rb') as generated_file:
+            generated_content = generated_file.read()
+
+        os.unlink(template_path)
+        os.unlink(output_path)
+
+        return generated_content
+
+
+    def generate_contract_docx(self):
+        self.ensure_one()
+
+        generated_content = self._render_contract_docx_content()
+
+        if not generated_content:
+            return False
+
+        filename = f"Contrato_LOPD_{self.partner_id.name or 'cliente'}.docx"
+
+        self.write({
+            'contract_docx': base64.b64encode(generated_content),
+            'contract_docx_filename': filename,
+        })
+
+        return True
+
+
+    def generate_contract_pdf(self):
+        self.ensure_one()
+
+        generated_docx = self._render_contract_docx_content()
+
+        if not generated_docx:
+            return False
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docx_path = os.path.join(tmpdir, 'contract.docx')
+
+            with open(docx_path, 'wb') as f:
+                f.write(generated_docx)
+
+            subprocess.run([
+                'libreoffice',
+                '--headless',
+                '--convert-to',
+                'pdf',
+                '--outdir',
+                tmpdir,
+                docx_path,
+            ], check=True)
+
+            pdf_path = os.path.join(tmpdir, 'contract.pdf')
+
+            with open(pdf_path, 'rb') as f:
+                pdf_content = f.read()
+
+        filename = f"Contrato_LOPD_{self.partner_id.name or 'cliente'}.pdf"
+
+        self.write({
+            'contract_docx': base64.b64encode(generated_docx),
+            'contract_docx_filename': f"Contrato_LOPD_{self.partner_id.name or 'cliente'}.docx",
+            'contract_pdf': base64.b64encode(pdf_content),
+            'contract_pdf_filename': filename,
+        })
 
         return True
