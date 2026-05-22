@@ -26,10 +26,83 @@
                         <field name="active"/>
                     </group>
 
-                    <group>
-                        <field name="file" filename="filename"/>
-                        <field name="filename" invisible="1"/>
-                    </group>
+                    <notebook>
+                        <page string="Texto contrato">
+                            <field name="body_html" widget="html"/>
+                        </page>
+                        
+                        <page string="Ayuda / Variables">
+                            <div class="alert alert-info">
+                                <p>
+                                    En el texto del contrato puedes usar las siguientes variables.
+                                    El sistema las sustituirá automáticamente por los datos del cliente/proveedor
+                                    cuando se genere la vista previa y el PDF final.
+                                </p>
+                            </div>
+
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Variable</th>
+                                        <th>Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>{{ fecha_contrato }}</code></td>
+                                        <td>Fecha de generación/aceptación del contrato.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_nombre }}</code></td>
+                                        <td>Nombre o razón social del cliente/proveedor.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_representante }}</code></td>
+                                        <td>Nombre completo de la persona representante o contacto.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_vat }}</code></td>
+                                        <td>CIF, NIF o NIE.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_email }}</code></td>
+                                        <td>Correo electrónico.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_direccion }}</code></td>
+                                        <td>Calle o dirección principal.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_cp }}</code></td>
+                                        <td>Código postal.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_ciudad }}</code></td>
+                                        <td>Ciudad o localidad.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_provincia }}</code></td>
+                                        <td>Provincia o estado.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>{{ cliente_pais }}</code></td>
+                                        <td>País.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="alert alert-warning">
+                                <p>
+                                    Es importante escribir las variables exactamente como aparecen en la tabla,
+                                    incluyendo las dobles llaves.
+                                </p>
+                                <p>
+                                    Ejemplo:
+                                    <code>{{ cliente_nombre }}</code>
+                                </p>
+                            </div>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>

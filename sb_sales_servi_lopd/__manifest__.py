@@ -23,7 +23,7 @@
         'data/mail_template.xml',
         'data/ir_cron.xml',
         'data/server_action.xml',
-        'reports/servilopd_contract_report.xml',
+        'reports/lopd_contract_report.xml',
     ],
     'assets': {
         'web.assets_frontend': [

@@ -39,6 +39,12 @@ class ServilopdDocument(models.Model):
         compute='_compute_display_name',
         store=True,
     )
+    
+    body_html = fields.Html(
+        string='Texto del contrato',
+        sanitize=False,
+        translate=True,
+    )
 
     @api.depends('name', 'version')
     def _compute_display_name(self):

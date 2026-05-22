@@ -2,10 +2,12 @@ import secrets
 import base64
 import tempfile
 import os
+import html
 
 from datetime import timedelta
 from odoo import models, fields, api
 from docxtpl import DocxTemplate
+from markupsafe import Markup
 
 class ServilopdRequest(models.Model):
     _name = 'servilopd.request'
@@ -292,50 +294,30 @@ class ServilopdRequest(models.Model):
         }
 
 
-    def _render_contract_docx_content(self, data=None):
+    def get_rendered_contract_html(self):
         self.ensure_one()
 
-        if not self.document_id or not self.document_id.file:
-            return False
+        raw_html = self.document_id.body_html or ''
+        rendered_html = html.unescape(raw_html)
 
-        template_content = base64.b64decode(self.document_id.file)
+        replacements = {
+            '{{ fecha_contrato }}': fields.Date.today().strftime('%d/%m/%Y'),
+            '{{ cliente_nombre }}': self.company_name or '',
+            '{{ cliente_representante }}': self.fullname or '',
+            '{{ cliente_vat }}': self.vat or '',
+            '{{ cliente_email }}': self.email or '',
+            '{{ cliente_direccion }}': self.street or '',
+            '{{ cliente_cp }}': self.zip or '',
+            '{{ cliente_ciudad }}': self.city or '',
+            '{{ cliente_provincia }}': self.state_id.name if self.state_id else '',
+            '{{ cliente_pais }}': self.country_id.name if self.country_id else '',
+        }
 
-        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as template_file:
-            template_file.write(template_content)
-            template_path = template_file.name
+        for key, value in replacements.items():
+            rendered_html = rendered_html.replace(key, value or '')
 
-        output_path = template_path.replace('.docx', '_generated.docx')
-
-        doc = DocxTemplate(template_path)
-        doc.render(self._get_contract_context(data))
-        doc.save(output_path)
-
-        with open(output_path, 'rb') as generated_file:
-            generated_content = generated_file.read()
-
-        os.unlink(template_path)
-        os.unlink(output_path)
-
-        return generated_content
-
-
-    def generate_contract_docx(self):
-        self.ensure_one()
-
-        generated_content = self._render_contract_docx_content()
-
-        if not generated_content:
-            return False
-
-        filename = f"Contrato_LOPD_{self.partner_id.name or 'cliente'}.docx"
-
-        self.write({
-            'contract_docx': base64.b64encode(generated_content),
-            'contract_docx_filename': filename,
-        })
-
-        return True
-    
+        return Markup(rendered_html)
+        
     def generate_contract_pdf_qweb(self):
         self.ensure_one()
 

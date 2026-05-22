@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_report_servilopd_contract" model="ir.actions.report">
+        <field name="name">Contrato LOPD</field>
+        <field name="model">servilopd.request</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">sb_sales_servi_lopd.report_servilopd_contract</field>
+        <field name="report_file">sb_sales_servi_lopd.report_servilopd_contract</field>
+
+        <field name="binding_model_id" ref="model_servilopd_request"/>
+        <field name="binding_type">report</field>
+
+        <field name="print_report_name">'Contrato_LOPD_%s' % (object.partner_id.name or '')</field>
+    </record>
+
+    <template id="report_servilopd_contract">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.external_layout">
+
+                    <div class="page">
+
+                        <t t-if="doc.document_id and doc.document_id.body_html">
+                            <t t-out="doc.get_rendered_contract_html()"/>
+                        </t>
+
+                        <t t-if="not doc.document_id or not doc.document_id.body_html">
+                            <h2>Contrato LOPD</h2>
+                            <p>No hay texto de contrato configurado.</p>
+                        </t>                    
+
+                    </div>
+
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

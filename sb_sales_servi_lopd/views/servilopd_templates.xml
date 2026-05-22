@@ -155,35 +155,6 @@
 
                                     <hr class="my-4"/>
 
-                                    <div class="alert alert-light border">
-                                        <h5 class="mb-2">Documento LOPD</h5>
-
-                                        <p class="mb-2">
-                                            Antes de aceptar, lee el documento LOPD vigente.
-                                        </p>
-
-                                        <t t-if="request_record.document_id">
-                                            <p class="mb-0">
-                                                <a t-att-href="'/lopd/document/%s' % request_record.token"
-                                                target="_blank"
-                                                class="btn btn-outline-primary btn-sm">
-                                                    Leer documento LOPD
-                                                </a>
-
-                                                <span class="ms-2 text-muted">
-                                                    Versión:
-                                                    <t t-esc="request_record.document_id.version"/>
-                                                </span>
-                                            </p>
-                                        </t>
-
-                                        <t t-if="not request_record.document_id">
-                                            <p class="text-danger mb-0">
-                                                No hay documento LOPD asociado a esta solicitud.
-                                            </p>
-                                        </t>
-                                    </div>
-
                                     <div class="form-check my-4">
                                         <input type="checkbox"
                                             name="lopd_accept"
