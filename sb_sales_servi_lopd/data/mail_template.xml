@@ -66,18 +66,61 @@
         <field name="email_from">{{ user.email_formatted }}</field>
         <field name="email_to">{{ object.email }}</field>
         <field name="body_html" type="html">
-            <div style="font-family: Arial, sans-serif; color: #333;">
-                <p>Hola <strong><t t-out="object.fullname or object.partner_id.name"/></strong>,</p>
+            <div style="font-family: Arial, sans-serif; color: #333; max-width: 650px; margin: 0 auto;">
 
-                <p>
-                    Hemos recibido correctamente tus datos y la aceptación del contrato LOPD.
-                </p>
+                <div style="background-color: #1f3a4a; color: white; padding: 24px; border-radius: 8px 8px 0 0;">
+                    <h2 style="margin: 0;">Contrato LOPD confirmado</h2>
+                    <p style="margin: 8px 0 0 0;">
+                        Hemos recibido correctamente tu aceptación
+                    </p>
+                </div>
 
-                <p>
-                    Adjuntamos el contrato generado con la información facilitada.
-                </p>
+                <div style="border: 1px solid #ddd; border-top: 0; padding: 24px; border-radius: 0 0 8px 8px;">
 
-                <p>Gracias.</p>
+                    <p>
+                        Hola
+                        <strong>
+                            <t t-out="object.fullname or object.partner_id.name"/>
+                        </strong>,
+                    </p>
+
+                    <p>
+                        Hemos recibido correctamente tus datos y la aceptación del contrato LOPD.
+                    </p>
+
+                    <p>
+                        Adjuntamos en este correo el contrato generado con la información facilitada.
+                        Te recomendamos conservar una copia para tu archivo.
+                    </p>
+
+                    <div style="background-color: #f6f8fa; border-left: 4px solid #1f3a4a; padding: 16px; margin: 24px 0;">
+                        <p style="margin: 0;">
+                            <strong>Fecha de aceptación:</strong>
+                            <t t-out="object.lopd_accepted_date"/>
+                        </p>
+
+                        <p style="margin: 8px 0 0 0;">
+                            <strong>Versión documento:</strong>
+                            <t t-out="object.lopd_version"/>
+                        </p>
+
+                        <p style="margin: 8px 0 0 0;">
+                            <strong>IP registrada:</strong>
+                            <t t-out="object.lopd_accept_ip"/>
+                        </p>
+                    </div>
+
+                    <p style="font-size: 14px; color: #666;">
+                        Si detectas algún dato incorrecto en el documento, por favor contacta con nosotros.
+                    </p>
+
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;"/>
+
+                    <p style="font-size: 12px; color: #999;">
+                        Este correo ha sido generado automáticamente por ServiLOPD.
+                    </p>
+
+                </div>
             </div>
         </field>
     </record>

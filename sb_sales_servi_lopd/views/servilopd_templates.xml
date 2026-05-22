@@ -327,13 +327,20 @@
                 });
 
                 previewButton.addEventListener('click', function () {
+                    if (previewButton.disabled) {
+                        return;
+                    }
+
                     if (!form.reportValidity()) {
                         return;
                     }
 
+                    previewButton.disabled = true;
+                    previewButton.innerHTML = 'Generando vista previa...';
+
                     const formData = new FormData(form);
 
-                   fetch('/lopd/form/preview', {
+                    fetch('/lopd/form/preview', {
                         method: 'POST',
                         body: formData
                     })
@@ -344,13 +351,28 @@
                             return;
                         }
 
+                        const iframe = document.getElementById('contract_preview_iframe');
                         iframe.src = result.preview_url;
 
                         openPreviewModal();
+                    })
+                    .catch(error => {
+                        console.error(error);
+                        alert('Error generando la vista previa.');
+                    })
+                    .finally(() => {
+                        previewButton.disabled = false;
+                        previewButton.innerHTML = 'Previsualizar contrato';
                     });
                 });
 
                 confirmButton.addEventListener('click', function () {
+                    if (confirmButton.disabled) {
+                        return;
+                    }
+
+                    confirmButton.disabled = true;
+                    confirmButton.innerHTML = 'Enviando contrato...';
 
                     const formData = new FormData(form);
 
@@ -360,15 +382,20 @@
                     })
                     .then(response => response.json())
                     .then(result => {
-
                         if (result.success) {
                             window.location.href = '/lopd/form/success';
                         } else {
                             alert(result.error || 'Error al enviar el formulario');
+                            confirmButton.disabled = false;
+                            confirmButton.innerHTML = 'Confirmar y enviar';
                         }
-
+                    })
+                    .catch(error => {
+                        console.error(error);
+                        alert('Error al enviar el contrato.');
+                        confirmButton.disabled = false;
+                        confirmButton.innerHTML = 'Confirmar y enviar';
                     });
-
                 });
             });
             </script>
