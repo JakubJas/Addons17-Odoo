@@ -13,14 +13,7 @@
     'depends': ['base','crm','mail'],
     'data': [
         "security/security.xml",
-        "security/ir.model.access.csv",
-
         "data/activity_types.xml",
-        "data/serviflow_option_data.xml",
-
-        #"views/crm_lead_views.xml",
-        'views/serviflow_option_views.xml',
-        'views/config_settings_view.xml',
     ],
     'installable': True,
     'application': True,
