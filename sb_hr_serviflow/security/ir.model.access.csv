@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_serviflow_task_office,serviflow.task office,model_serviflow_task,sb_hr_serviflow.group_serviflow_office_tech,1,1,0,0
+access_serviflow_task_manager,serviflow.task manager,model_serviflow_task,sb_hr_serviflow.group_serviflow_manager,1,1,1,1
+access_serviflow_reviewer_config_manager,serviflow.reviewer.config manager,model_serviflow_reviewer_config,sb_hr_serviflow.group_serviflow_manager,1,1,1,1

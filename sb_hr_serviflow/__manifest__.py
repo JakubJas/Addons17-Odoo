@@ -13,7 +13,9 @@
     'depends': ['base','crm','mail'],
     'data': [
         "security/security.xml",
-        "data/activity_types.xml",
+        "security/ir.model.access.csv",
+        "views/serviflow_reviewer_config_views.xml",
+        "views/serviflow_task_views.xml",
     ],
     'installable': True,
     'application': True,

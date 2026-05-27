@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="group_office_tech" model="res.groups">
-        <field name="name">Oficina Técnica (Serviflow)</field>
-        <field name="category_id" ref="base.module_category_crm"/>
+
+    <record id="group_serviflow_office_tech" model="res.groups">
+        <field name="name">Serviflow / Oficina Técnica</field>
     </record>
 
-    <record id="group_budget_validators" model="res.groups">
-        <field name="name">Validadores PPTO (Serviflow)</field>
-        <field name="category_id" ref="base.module_category_crm"/>
+    <record id="group_serviflow_manager" model="res.groups">
+        <field name="name">Serviflow / Responsable</field>
     </record>
+
 </odoo>

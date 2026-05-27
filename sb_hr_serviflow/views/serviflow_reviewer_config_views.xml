@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_serviflow_reviewer_config_tree" model="ir.ui.view">
+        <field name="name">serviflow.reviewer.config.tree</field>
+        <field name="model">serviflow.reviewer.config</field>
+        <field name="arch" type="xml">
+            <tree string="Revisores Serviflow" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_serviflow_reviewer_config_form" model="ir.ui.view">
+        <field name="name">serviflow.reviewer.config.form</field>
+        <field name="model">serviflow.reviewer.config</field>
+        <field name="arch" type="xml">
+            <form string="Revisor Serviflow">
+                <sheet>
+                    <group>
+                        <field name="sequence"/>
+                        <field name="name"/>
+                        <field name="user_id"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_serviflow_reviewer_config" model="ir.actions.act_window">
+        <field name="name">Revisores</field>
+        <field name="res_model">serviflow.reviewer.config</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_serviflow_reviewer_config"
+              name="Revisores"
+              parent="menu_serviflow_root"
+              action="action_serviflow_reviewer_config"
+              sequence="50"
+              groups="sb_hr_serviflow.group_serviflow_manager"/>
+
+</odoo>
