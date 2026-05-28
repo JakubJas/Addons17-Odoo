@@ -202,3 +202,89 @@ class ServiflowTask(models.Model):
                     "state": "accepted",
                     "note": f"Revisión asignada a {reviewer.name}.",
                 })
+                
+    def action_review_approve(self):
+        for task in self:
+            if task.task_type != "review":
+                raise UserError("Esta solicitud no es una revisión.")
+
+            if task.assigned_user_id != self.env.user:
+                raise UserError("Solo el revisor asignado puede aprobar esta revisión.")
+
+            task.write({
+                "review_result": "approved",
+                "state": "done",
+            })
+
+            task.message_post(
+                body=f"Revisión aprobada por {self.env.user.name}"
+            )
+
+            task._check_all_reviews_done()
+
+
+    def action_review_reject(self):
+        for task in self:
+            if task.task_type != "review":
+                raise UserError("Esta solicitud no es una revisión.")
+
+            if task.assigned_user_id != self.env.user:
+                raise UserError("Solo el revisor asignado puede rechazar esta revisión.")
+
+            task.write({
+                "review_result": "rejected",
+                "state": "done",
+            })
+
+            task.message_post(
+                body=f"Revisión rechazada por {self.env.user.name}"
+            )
+
+            task._send_back_to_technical()
+            
+    def _check_all_reviews_done(self):
+        for task in self:
+            opportunity = task.opportunity_id
+
+            reviews = self.env["serviflow.task"].search([
+                ("opportunity_id", "=", opportunity.id),
+                ("task_type", "=", "review"),
+            ])
+
+            if not reviews:
+                return
+
+            if any(review.review_result == "rejected" for review in reviews):
+                return
+
+            if all(review.review_result == "approved" for review in reviews):
+                approved_stage = self.env["crm.stage"].search([
+                    ("name", "=", "Aprobado")
+                ], limit=1)
+
+                if approved_stage:
+                    opportunity.write({
+                        "stage_id": approved_stage.id,
+                    })
+
+
+    def _send_back_to_technical(self):
+        for task in self:
+            opportunity = task.opportunity_id
+
+            technical_stage = self.env["crm.stage"].search([
+                ("name", "=", "Solicitado Presupuesto Técnico")
+            ], limit=1)
+
+            if technical_stage:
+                opportunity.write({
+                    "stage_id": technical_stage.id,
+                })
+
+            self.env["serviflow.task"].sudo().create({
+                "name": f"Corrección PPTO - {opportunity.name}",
+                "opportunity_id": opportunity.id,
+                "task_type": "budget",
+                "state": "pending",
+                "note": f"El presupuesto fue rechazado por {self.env.user.name}. Revisar y corregir.",
+            })
