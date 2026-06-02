@@ -89,8 +89,11 @@ class ServiflowTask(models.Model):
     def action_accept(self):
         for task in self:
 
+            if task.task_type != "budget":
+                raise UserError("Solo se pueden aceptar solicitudes de presupuesto técnico.")
+
             if task.state != "pending":
-                continue
+                raise UserError("Esta solicitud ya no está pendiente.")
 
             task.write({
                 "state": "accepted",
@@ -98,7 +101,6 @@ class ServiflowTask(models.Model):
                 "assigned_user_id": self.env.user.id,
             })
 
-            # asignar oportunidad CRM
             task.opportunity_id.write({
                 "user_id": self.env.user.id,
             })
@@ -143,6 +145,9 @@ class ServiflowTask(models.Model):
 
     def action_reassign_to_me(self):
         for task in self:
+            if task.task_type != "budget":
+                raise UserError("No se pueden reasignar tareas de revisión.")
+            
             if task.state not in ("pending", "accepted"):
                 raise UserError(_("Solo se pueden reasignar solicitudes pendientes o aceptadas."))
 
@@ -158,6 +163,10 @@ class ServiflowTask(models.Model):
             
     def action_reassign(self):
         for task in self:
+            if task.task_type != "budget":
+                raise UserError("No se pueden reasignar tareas de revisión. Cambia el revisor desde la configuración de Revisores.")
+
+            
             if not task.reassign_user_id:
                 raise UserError("Selecciona un usuario para reasignar.")
 
