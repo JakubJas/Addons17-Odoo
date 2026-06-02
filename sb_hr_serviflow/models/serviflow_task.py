@@ -79,6 +79,12 @@ class ServiflowTask(models.Model):
         default="pending",
         tracking=True,
     )
+    
+    review_round = fields.Integer(
+        string="Ronda de revisión",
+        default=1,
+        tracking=True,
+    )
 
     def action_accept(self):
         for task in self:
@@ -176,13 +182,20 @@ class ServiflowTask(models.Model):
             if task.task_type != "budget":
                 continue
 
-            existing_reviews = self.env["serviflow.task"].search_count([
+            last_review = self.env["serviflow.task"].search([
                 ("opportunity_id", "=", task.opportunity_id.id),
                 ("task_type", "=", "review"),
-                ("state", "in", ["pending", "accepted"]),
+            ], order="review_round desc", limit=1)
+
+            next_round = (last_review.review_round or 0) + 1 if last_review else 1
+
+            existing_same_round = self.env["serviflow.task"].search_count([
+                ("opportunity_id", "=", task.opportunity_id.id),
+                ("task_type", "=", "review"),
+                ("review_round", "=", next_round),
             ])
 
-            if existing_reviews:
+            if existing_same_round:
                 continue
 
             reviewers = self.env["serviflow.reviewer.config"].sudo().search([
@@ -197,9 +210,11 @@ class ServiflowTask(models.Model):
                     "name": f"{reviewer.name} - {task.opportunity_id.name}",
                     "opportunity_id": task.opportunity_id.id,
                     "task_type": "review",
+                    "review_round": next_round,
                     "assigned_user_id": reviewer.user_id.id,
-                    "accepted_user_id": reviewer.user_id.id,
-                    "state": "accepted",
+                    "accepted_user_id": False,
+                    "state": "pending",
+                    "review_result": "pending",
                     "note": f"Revisión asignada a {reviewer.name}.",
                 })
                 
@@ -211,9 +226,13 @@ class ServiflowTask(models.Model):
             if task.assigned_user_id != self.env.user:
                 raise UserError("Solo el revisor asignado puede aprobar esta revisión.")
 
+            if task.review_result != "pending":
+                raise UserError("Esta revisión ya fue procesada.")
+
             task.write({
                 "review_result": "approved",
                 "state": "done",
+                "accepted_user_id": self.env.user.id,
             })
 
             task.message_post(
@@ -231,9 +250,13 @@ class ServiflowTask(models.Model):
             if task.assigned_user_id != self.env.user:
                 raise UserError("Solo el revisor asignado puede rechazar esta revisión.")
 
+            if task.review_result != "pending":
+                raise UserError("Esta revisión ya fue procesada.")
+
             task.write({
                 "review_result": "rejected",
                 "state": "done",
+                "accepted_user_id": self.env.user.id,
             })
 
             task.message_post(
@@ -246,9 +269,18 @@ class ServiflowTask(models.Model):
         for task in self:
             opportunity = task.opportunity_id
 
+            last_round_review = self.env["serviflow.task"].search([
+                ("opportunity_id", "=", opportunity.id),
+                ("task_type", "=", "review"),
+            ], order="review_round desc", limit=1)
+
+            if not last_round_review:
+                return
+
             reviews = self.env["serviflow.task"].search([
                 ("opportunity_id", "=", opportunity.id),
                 ("task_type", "=", "review"),
+                ("review_round", "=", last_round_review.review_round),
             ])
 
             if not reviews:
@@ -281,10 +313,33 @@ class ServiflowTask(models.Model):
                     "stage_id": technical_stage.id,
                 })
 
+            original_budget_task = self.env["serviflow.task"].search([
+                ("opportunity_id", "=", opportunity.id),
+                ("task_type", "=", "budget"),
+                ("state", "=", "done"),
+            ], order="create_date desc", limit=1)
+
+            assigned_user = original_budget_task.accepted_user_id or original_budget_task.assigned_user_id
+            
+            current_round = task.review_round
+
+            open_reviews = self.env["serviflow.task"].search([
+                ("opportunity_id", "=", opportunity.id),
+                ("task_type", "=", "review"),
+                ("review_round", "=", current_round),
+                ("state", "in", ["pending", "accepted"]),
+            ])
+
+            open_reviews.write({
+                "state": "cancelled",
+            })
+
             self.env["serviflow.task"].sudo().create({
                 "name": f"Corrección PPTO - {opportunity.name}",
                 "opportunity_id": opportunity.id,
                 "task_type": "budget",
-                "state": "pending",
+                "state": "accepted" if assigned_user else "pending",
+                "assigned_user_id": assigned_user.id if assigned_user else False,
+                "accepted_user_id": assigned_user.id if assigned_user else False,
                 "note": f"El presupuesto fue rechazado por {self.env.user.name}. Revisar y corregir.",
             })
