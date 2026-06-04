@@ -117,7 +117,8 @@
 
     <menuitem id="menu_serviflow_root"
               name="Serviflow"
-              sequence="20"/>
+              sequence="20"
+              web_icon="SB-Addons17,sb_hr_serviflow/static/description/icon.png"/>
 
     <menuitem id="menu_serviflow_tasks_user"
               name="Mis Solicitudes"

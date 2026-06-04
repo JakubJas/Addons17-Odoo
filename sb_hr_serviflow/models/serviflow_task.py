@@ -292,21 +292,26 @@ class ServiflowTask(models.Model):
                 ("review_round", "=", last_round_review.review_round),
             ])
 
-            if not reviews:
-                return
-
             if any(review.review_result == "rejected" for review in reviews):
                 return
 
-            if all(review.review_result == "approved" for review in reviews):
-                approved_stage = self.env["crm.stage"].search([
-                    ("name", "=", "Aprobado")
-                ], limit=1)
+            if not reviews or any(review.review_result == "pending" for review in reviews):
+                return
 
-                if approved_stage:
-                    opportunity.write({
-                        "stage_id": approved_stage.id,
-                    })
+            approved_stage = self.env["crm.stage"].search([
+                ("name", "=", "Aprobado")
+            ], limit=1)
+
+            if not approved_stage:
+                raise UserError("No se encontró la etapa Aprobado.")
+
+            opportunity.write({
+                "stage_id": approved_stage.id,
+            })
+
+            opportunity.message_post(
+                body=f"Presupuesto aprobado tras completar la ronda {last_round_review.review_round} de revisión."
+            )
 
 
     def _send_back_to_technical(self):
