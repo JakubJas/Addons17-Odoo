@@ -24,11 +24,13 @@ class CrmLead(models.Model):
             if existing:
                 continue
 
-            self.env["serviflow.task"].create({
+            task = self.env["serviflow.task"].create({
                 "name": f"PPTO - {lead.name}",
                 "opportunity_id": lead.id,
                 "task_type": "budget",
                 "note": f"Solicitud creada automáticamente desde CRM para {lead.name}.",
             })
+
+            task._create_group_activities()
 
         return res

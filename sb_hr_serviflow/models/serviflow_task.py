@@ -104,6 +104,8 @@ class ServiflowTask(models.Model):
             task.opportunity_id.write({
                 "user_id": self.env.user.id,
             })
+            
+            task._close_user_activities()
 
             task.message_post(
                 body=f"Solicitud aceptada por {self.env.user.name}"
@@ -123,6 +125,8 @@ class ServiflowTask(models.Model):
             task.write({
                 "state": "done",
             })
+            
+            task._close_user_activities()
 
             done_stage = self.env["crm.stage"].search([
                 ("name", "=", "Presupuestado")
@@ -179,6 +183,9 @@ class ServiflowTask(models.Model):
             task.opportunity_id.write({
                 "user_id": task.reassign_user_id.id,
             })
+            
+            task._close_user_activities()
+            task._create_user_activity()
 
             task.message_post(
                 body=f"Solicitud reasignada a {task.reassign_user_id.name} por {self.env.user.name}"
@@ -215,7 +222,7 @@ class ServiflowTask(models.Model):
                 raise UserError("No hay revisores configurados en Serviflow.")
 
             for reviewer in reviewers:
-                self.env["serviflow.task"].sudo().create({
+                review_task = self.env["serviflow.task"].sudo().create({
                     "name": f"{reviewer.name} - {task.opportunity_id.name}",
                     "opportunity_id": task.opportunity_id.id,
                     "task_type": "review",
@@ -226,6 +233,8 @@ class ServiflowTask(models.Model):
                     "review_result": "pending",
                     "note": f"Revisión asignada a {reviewer.name}.",
                 })
+
+                review_task._create_user_activity()
                 
     def action_review_approve(self):
         for task in self:
@@ -243,6 +252,8 @@ class ServiflowTask(models.Model):
                 "state": "done",
                 "accepted_user_id": self.env.user.id,
             })
+            
+            task._close_user_activities()
 
             task.message_post(
                 body=f"Revisión aprobada por {self.env.user.name}"
@@ -267,6 +278,8 @@ class ServiflowTask(models.Model):
                 "state": "done",
                 "accepted_user_id": self.env.user.id,
             })
+            
+            task._close_user_activities()
 
             task.message_post(
                 body=f"Revisión rechazada por {self.env.user.name}"
@@ -348,7 +361,7 @@ class ServiflowTask(models.Model):
                 "state": "cancelled",
             })
 
-            self.env["serviflow.task"].sudo().create({
+            correction_task = self.env["serviflow.task"].sudo().create({
                 "name": f"Corrección PPTO - {opportunity.name}",
                 "opportunity_id": opportunity.id,
                 "task_type": "budget",
@@ -357,3 +370,88 @@ class ServiflowTask(models.Model):
                 "accepted_user_id": assigned_user.id if assigned_user else False,
                 "note": f"El presupuesto fue rechazado por {self.env.user.name}. Revisar y corregir.",
             })
+
+            correction_task._create_user_activity()
+            
+    def _create_user_activity(self):
+        activity_type = self.env.ref(
+            "mail.mail_activity_data_todo",
+            raise_if_not_found=False
+        )
+
+        model_id = self.env["ir.model"]._get_id("serviflow.task")
+
+        for task in self:
+            if not activity_type:
+                continue
+
+            if not task.assigned_user_id:
+                continue
+
+            existing = self.env["mail.activity"].sudo().search_count([
+                ("res_model", "=", "serviflow.task"),
+                ("res_id", "=", task.id),
+                ("user_id", "=", task.assigned_user_id.id),
+            ])
+
+            if existing:
+                continue
+
+            self.env["mail.activity"].sudo().create({
+                "res_model_id": model_id,
+                "res_id": task.id,
+                "user_id": task.assigned_user_id.id,
+                "activity_type_id": activity_type.id,
+                "summary": task.name,
+                "note": task.note or "",
+                "date_deadline": fields.Date.today(),
+            })
+
+
+    def _create_group_activities(self):
+        activity_type = self.env.ref(
+            "mail.mail_activity_data_todo",
+            raise_if_not_found=False
+        )
+
+        group = self.env.ref(
+            "sb_hr_serviflow.group_serviflow_office_tech",
+            raise_if_not_found=False
+        )
+
+        model_id = self.env["ir.model"]._get_id("serviflow.task")
+
+        for task in self:
+            if not activity_type or not group:
+                continue
+
+            for user in group.users:
+                existing = self.env["mail.activity"].sudo().search_count([
+                    ("res_model", "=", "serviflow.task"),
+                    ("res_id", "=", task.id),
+                    ("user_id", "=", user.id),
+                ])
+
+                if existing:
+                    continue
+
+                self.env["mail.activity"].sudo().create({
+                    "res_model_id": model_id,
+                    "res_id": task.id,
+                    "user_id": user.id,
+                    "activity_type_id": activity_type.id,
+                    "summary": task.name,
+                    "note": task.note or "",
+                    "date_deadline": fields.Date.today(),
+                })
+
+
+    def _close_user_activities(self):
+        for task in self:
+            activities = self.env["mail.activity"].sudo().search([
+                ("res_model", "=", "serviflow.task"),
+                ("res_id", "=", task.id),
+            ])
+
+            if activities:
+                activities.action_feedback(feedback="Gestionado desde Serviflow")
