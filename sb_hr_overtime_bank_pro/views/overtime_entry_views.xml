@@ -8,7 +8,7 @@
                 <field name="employee_id" string="Empleado"/>
                 <field name="date" string="Fecha"/>
                 <field name="type" string="Tipo"/>
-                <field name="signed_hours" string="Horas"/>
+                <field name="signed_hours" string="Horas" widget="float_time" sum="Total"/>
                 <field name="state" string="Estado"/>
                 <field name="description" string="Descripción"/>
             </tree>
@@ -36,7 +36,7 @@
                     <group>
                         <field name="employee_id" readonly="state == 'done'" string="Empleado"/>
                         <field name="date" readonly="state == 'done'" string="Fecha"/>
-                        <field name="hours" readonly="state == 'done'" string="Horas"/>
+                        <field name="hours" readonly="state == 'done'" string="Horas" widget="float_time"/>
                         <field name="type" readonly="state == 'done'" string="Tipo"/>
                         <field name="attendance_id" invisible="1"/>
                         <field name="leave_allocation_id" invisible="1"/>
