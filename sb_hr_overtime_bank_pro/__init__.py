@@ -1,12 +1,16 @@
 from . import models
 from . import wizard
 
-from odoo import fields
+
+def _get_attendance_overtime(att):
+    if 'overtime_hours' in att._fields:
+        return att.overtime_hours or 0.0
+    if 'extra_hours' in att._fields:
+        return att.extra_hours or 0.0
+    return 0.0
+
 
 def migrate_overtime_from_attendance(env):
-    
-    from .models.overtime_utils import get_expected_hours
-
     Overtime = env['hr.overtime.entry']
     Attendance = env['hr.attendance']
 
@@ -15,25 +19,36 @@ def migrate_overtime_from_attendance(env):
     ])
 
     for att in attendances:
-        employee = att.employee_id
-        date = att.check_in.date()
+        if not att.employee_id or not att.check_in:
+            continue
 
-        expected_hours = _get_expected_hours(employee, date)
-        worked_hours = att.worked_hours or 0
+        overtime_hours = _get_attendance_overtime(att)
 
-        overtime_hours = worked_hours - expected_hours
+        if overtime_hours <= 0:
+            continue
 
-        # SOLO si hay horas extra reales
-        if overtime_hours > 0:
-            Overtime.with_context(
-                skip_overtime_limit=True,
-                skip_comp_sync=True
-            ).create({
-                'employee_id': employee.id,
-                'date': date,
-                'hours': overtime_hours,
-                'type': 'extra',
-                'state': 'done',
-                'attendance_id': att.id,
-                'reference': 'Migración automática',
-            })
+        existing = Overtime.search([
+            '|',
+            ('attendance_id', '=', att.id),
+            '&',
+            ('employee_id', '=', att.employee_id.id),
+            ('date', '=', att.check_in.date()),
+            ('type', '=', 'extra'),
+            ('reference', '=', 'Migración automática desde Asistencias'),
+        ], limit=1)
+
+        if existing:
+            continue
+
+        Overtime.with_context(
+            skip_overtime_limit=True,
+            skip_comp_sync=True,
+        ).create({
+            'employee_id': att.employee_id.id,
+            'date': att.check_in.date(),
+            'hours': overtime_hours,
+            'type': 'extra',
+            'state': 'done',
+            'attendance_id': att.id,
+            'reference': 'Migración automática desde Asistencias',
+        })
