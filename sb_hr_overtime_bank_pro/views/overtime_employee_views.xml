@@ -28,7 +28,7 @@
                         <tree>
                             <field name="date" string="Fecha"/>
                             <field name="type" string="Tipo"/>
-                            <field name="hours" string="Horas"/>
+                            <field name="hours" string="Horas" widget="float_time"/>
                             <field name="reference" string="Referencia"/>
                             <field name="state" string="Estado"/>
                         </tree>

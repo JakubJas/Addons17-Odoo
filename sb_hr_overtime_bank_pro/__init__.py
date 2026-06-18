@@ -24,8 +24,11 @@ def migrate_overtime_from_attendance(env):
 
         overtime_hours = _get_attendance_overtime(att)
 
-        if overtime_hours <= 0:
+        if overtime_hours == 0:
             continue
+
+        entry_type = 'extra' if overtime_hours > 0 else 'compensation'
+        hours = abs(overtime_hours)
 
         existing = Overtime.search([
             '|',
@@ -46,8 +49,8 @@ def migrate_overtime_from_attendance(env):
         ).create({
             'employee_id': att.employee_id.id,
             'date': att.check_in.date(),
-            'hours': overtime_hours,
-            'type': 'extra',
+            'hours': hours,
+            'type': entry_type,
             'state': 'done',
             'attendance_id': att.id,
             'reference': 'Migración automática desde Asistencias',
