@@ -38,7 +38,7 @@ class HrAttendance(models.Model):
                     rec.overtime_entry_id = False
                 continue
 
-            entry_type = "extra" if overtime > 0 else "compensation"
+            entry_type = "extra" if overtime > 0 else "early_exit"
             hours = abs(overtime)
 
             values = {

@@ -7,6 +7,7 @@ class HrOvertimeEntry(models.Model):
     _description = "Overtime Bank Entry"
     _order = "date desc, id desc"
     _inherit = ["mail.thread", "mail.activity.mixin"]
+    MIN_HOURS = -80
     MAX_HOURS = 80
 
     employee_id = fields.Many2one("hr.employee", required=True)
@@ -17,6 +18,7 @@ class HrOvertimeEntry(models.Model):
         ("extra", "Generar banco de horas extras"),
         ("payment", "Pagar horas extras"),
         ("compensation", "Compensar horas extras"),
+        ("early_exit", "Salida temprana"),
         ("adjustment", "Ajuste manual")
     ], required=True)
 
@@ -73,6 +75,15 @@ class HrOvertimeEntry(models.Model):
                         f"El saldo final sería {round(future_balance, 2)} horas.\n\n"
                         f"No puede superar el límite de {self.MAX_HOURS} horas.\n\n"
                         f"Reduce las horas o compensa antes de añadir más."
+                    )
+
+                if future_balance < self.MIN_HOURS:
+                    raise UserError(
+                        f"El empleado ya tiene {round(current_balance, 2)} horas acumuladas.\n\n"
+                        f"Estás intentando restar {abs(round(added_hours, 2))} horas.\n\n"
+                        f"El saldo final sería {round(future_balance, 2)} horas.\n\n"
+                        f"No puede bajar de {self.MIN_HOURS} horas.\n\n"
+                        f"Revisa la compensación o ajusta las horas."
                     )
 
         records = super().create(vals_list)
@@ -247,7 +258,7 @@ class HrOvertimeEntry(models.Model):
         if self.type == "extra":
             return self.hours
 
-        if self.type in ("payment", "compensation"):
+        if self.type in ("early_exit", "payment", "compensation"):
             return -abs(self.hours)
 
         if self.type == "adjustment":
