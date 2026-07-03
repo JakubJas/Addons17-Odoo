@@ -22,7 +22,8 @@
         "views/overtime_payment_views.xml",
         "views/hr_attendance_inherit.xml",
         "views/overtime_menu.xml",
-        "data/cron_alerts.xml"
+        "data/cron_alerts.xml",
+        "data/rebuild_overtime.xml",
     ],
     'post_init_hook': 'migrate_overtime_from_attendance',
     "installable": True,

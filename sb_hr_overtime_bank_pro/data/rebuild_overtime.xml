@@ -1,0 +1,3 @@
+<odoo>
+    <function model="hr.attendance" name="rebuild_attendance_overtime_entries"/>
+</odoo>
