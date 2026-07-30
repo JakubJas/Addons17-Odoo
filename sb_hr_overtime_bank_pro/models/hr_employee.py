@@ -13,6 +13,17 @@ class HrEmployee(models.Model):
         compute="_compute_overtime_balance",
         string="Overtime Balance"
     )
+    
+    overtime_calculation_mode = fields.Selection(
+        [
+            ("daily", "Diario"),
+            ("weekly", "Semanal flexible"),
+        ],
+        string="Cálculo horas extra",
+        default="daily",
+        required=True,
+        help="Define cómo se calculan automáticamente las horas extra de este empleado.",
+    )
 
     @api.depends("overtime_entry_ids.hours", "overtime_entry_ids.type", "overtime_entry_ids.state")
     def _compute_overtime_balance(self):
