@@ -14,38 +14,52 @@ class HrAttendance(models.Model):
     @api.model
     def create(self, vals):
         rec = super().create(vals)
-        rec._sync_overtime_day()
+        rec._sync_overtime_period()
         return rec
 
     def write(self, vals):
-        days = set()
+        affected_periods = set()
 
+        # Guardamos empleado y fecha anteriores al cambio.
         for rec in self:
             if rec.employee_id and rec.check_in:
-                days.add((rec.employee_id.id, rec._get_local_day()))
+                affected_periods.add(
+                    (rec.employee_id.id, rec._get_local_day())
+                )
 
         res = super().write(vals)
 
+        # Añadimos empleado y fecha posteriores al cambio.
         for rec in self:
             if rec.employee_id and rec.check_in:
-                days.add((rec.employee_id.id, rec._get_local_day()))
+                affected_periods.add(
+                    (rec.employee_id.id, rec._get_local_day())
+                )
 
-        for employee_id, day in days:
-            self._sync_overtime_for_employee_day(employee_id, day)
+        for employee_id, local_day in affected_periods:
+            self._sync_overtime_for_employee_period(
+                employee_id,
+                local_day,
+            )
 
         return res
 
     def unlink(self):
-        days = set()
+        affected_periods = set()
 
         for rec in self:
             if rec.employee_id and rec.check_in:
-                days.add((rec.employee_id.id, rec._get_local_day()))
+                affected_periods.add(
+                    (rec.employee_id.id, rec._get_local_day())
+                )
 
         res = super().unlink()
 
-        for employee_id, day in days:
-            self._sync_overtime_for_employee_day(employee_id, day)
+        for employee_id, local_day in affected_periods:
+            self._sync_overtime_for_employee_period(
+                employee_id,
+                local_day,
+            )
 
         return res
 
@@ -80,13 +94,42 @@ class HrAttendance(models.Model):
 
         return utc_start, utc_end
 
-    def _sync_overtime_day(self):
+    def _sync_overtime_period(self):
+        affected_periods = set()
+
         for rec in self:
             if rec.employee_id and rec.check_in:
-                rec._sync_overtime_for_employee_day(
-                    rec.employee_id.id,
-                    rec._get_local_day()
+                affected_periods.add(
+                    (rec.employee_id.id, rec._get_local_day())
                 )
+
+        for employee_id, local_day in affected_periods:
+            self._sync_overtime_for_employee_period(
+                employee_id,
+                local_day,
+            )
+            
+    def _sync_overtime_for_employee_period(self, employee_id, local_day):
+        employee = self.env["hr.employee"].browse(employee_id).exists()
+
+        if not employee:
+            return
+
+        calculation_mode = (
+            employee.overtime_calculation_mode or "daily"
+        )
+
+        if calculation_mode == "weekly":
+            # Sustituiremos esta llamada por el motor semanal.
+            return self._sync_overtime_for_employee_day(
+                employee.id,
+                local_day,
+            )
+
+        return self._sync_overtime_for_employee_day(
+            employee.id,
+            local_day,
+        )
 
     def _sync_overtime_for_employee_day(self, employee_id, day):
         Overtime = self.env["hr.overtime.entry"]
@@ -169,6 +212,9 @@ class HrAttendance(models.Model):
             days.add((att.employee_id.id, att._get_local_day()))
 
         for employee_id, day in days:
-            self._sync_overtime_for_employee_day(employee_id, day)
+            self._sync_overtime_for_employee_period(
+                employee_id,
+                day,
+            )
 
         return True
