@@ -11,6 +11,9 @@
                 <field name="signed_hours" string="Horas" widget="float_time" sum="Total"/>
                 <field name="state" string="Estado"/>
                 <field name="description" string="Descripción"/>
+                <field name="expected_hours" string="Previstas" widget="float_time" optional="hide"/>
+                <field name="worked_hours" string="Trabajadas" widget="float_time" optional="hide"/>
+                <field name="difference_hours" string="Diferencia" widget="float_time" optional="show"/>
             </tree>
         </field>
     </record>
@@ -40,6 +43,12 @@
                         <field name="type" readonly="state == 'done'" string="Tipo"/>
                         <field name="attendance_id" invisible="1"/>
                         <field name="leave_allocation_id" invisible="1"/>
+                    </group>
+
+                    <group string="Cálculo automático">
+                        <field name="expected_hours" widget="float_time" readonly="1"/>
+                        <field name="worked_hours" widget="float_time" readonly="1"/>
+                        <field name="difference_hours" widget="float_time" readonly="1"/>
                     </group>
 
                     <group>

@@ -38,6 +38,27 @@ class HrOvertimeEntry(models.Model):
     leave_allocation_id = fields.Many2one("hr.leave.allocation")
     
     signed_hours = fields.Float(string="Horas reales", compute="_compute_signed_hours", store=True)
+    
+    expected_hours = fields.Float(
+        string="Horas previstas",
+        tracking=True,
+        help="Horas que el empleado debía trabajar en el periodo calculado.",
+    )
+
+    worked_hours = fields.Float(
+        string="Horas trabajadas",
+        tracking=True,
+        help="Horas realmente trabajadas por el empleado en el periodo calculado.",
+    )
+
+    difference_hours = fields.Float(
+        string="Diferencia de horas",
+        compute="_compute_difference_hours",
+        store=True,
+        readonly=True,
+        tracking=True,
+        help="Diferencia entre las horas trabajadas y las horas previstas.",
+    )
 
     def _get_total_balance(self, employee):
         entries = self.search([
@@ -45,12 +66,19 @@ class HrOvertimeEntry(models.Model):
             ('state', '=', 'done')
         ])
         return sum(rec._get_signed_hours() for rec in entries)
+    
+    @api.depends("expected_hours", "worked_hours")
+    def _compute_difference_hours(self):
+        for rec in self:
+            rec.difference_hours = (
+                (rec.worked_hours or 0.0)
+                - (rec.expected_hours or 0.0)
+            )
 
     @api.model_create_multi
     def create(self, vals_list):
-
-        # 🔥 SALTAR VALIDACIÓN EN MIGRACIÓN
-        if self.env.context.get('skip_overtime_limit'):
+        # Se utiliza en reconstrucciones y sincronizaciones automáticas.
+        if self.env.context.get("skip_overtime_limit"):
             records = super().create(vals_list)
 
             if not self.env.context.get("skip_comp_sync"):
@@ -59,41 +87,68 @@ class HrOvertimeEntry(models.Model):
             return records
 
         for vals in vals_list:
-            if vals.get('type') == 'extra' and vals.get('state', 'draft') == 'done':
+            new_state = vals.get("state", "draft")
 
-                employee = self.env['hr.employee'].browse(vals.get('employee_id'))
+            # Los registros en borrador todavía no afectan al saldo.
+            if new_state != "done":
+                continue
 
-                fake = self.new(vals)
-                added_hours = fake._get_signed_hours()
-                current_balance = self._get_total_balance(employee)
-                future_balance = current_balance + added_hours
+            employee_id = vals.get("employee_id")
+            if not employee_id:
+                continue
 
-                if future_balance > self.MAX_HOURS:
-                    raise UserError(
-                        f"El empleado ya tiene {round(current_balance, 2)} horas acumuladas.\n\n"
-                        f"Estás intentando añadir {round(added_hours, 2)} horas.\n\n"
-                        f"El saldo final sería {round(future_balance, 2)} horas.\n\n"
-                        f"No puede superar el límite de {self.MAX_HOURS} horas.\n\n"
-                        f"Reduce las horas o compensa antes de añadir más."
-                    )
+            employee = self.env["hr.employee"].browse(
+                employee_id
+            ).exists()
 
-                if future_balance < self.MIN_HOURS:
-                    raise UserError(
-                        f"El empleado ya tiene {round(current_balance, 2)} horas acumuladas.\n\n"
-                        f"Estás intentando restar {abs(round(added_hours, 2))} horas.\n\n"
-                        f"El saldo final sería {round(future_balance, 2)} horas.\n\n"
-                        f"No puede bajar de {self.MIN_HOURS} horas.\n\n"
-                        f"Revisa la compensación o ajusta las horas."
-                    )
+            if not employee:
+                continue
+
+            simulated_entry = self.new(vals)
+
+            current_balance = self._get_total_balance(employee)
+            added_hours = simulated_entry._get_signed_hours()
+            future_balance = current_balance + added_hours
+
+            if future_balance > self.MAX_HOURS:
+                raise UserError(
+                    f"El empleado tiene actualmente "
+                    f"{round(current_balance, 2)} horas acumuladas.\n\n"
+                    f"Este movimiento modificaría el saldo en "
+                    f"{round(added_hours, 2)} horas.\n\n"
+                    f"El saldo final sería "
+                    f"{round(future_balance, 2)} horas.\n\n"
+                    f"No puede superar el límite de "
+                    f"{self.MAX_HOURS} horas."
+                )
+
+            if future_balance < self.MIN_HOURS:
+                raise UserError(
+                    f"El empleado tiene actualmente "
+                    f"{round(current_balance, 2)} horas acumuladas.\n\n"
+                    f"Este movimiento modificaría el saldo en "
+                    f"{round(added_hours, 2)} horas.\n\n"
+                    f"El saldo final sería "
+                    f"{round(future_balance, 2)} horas.\n\n"
+                    f"No puede bajar del límite de "
+                    f"{self.MIN_HOURS} horas."
+                )
 
         records = super().create(vals_list)
 
+        type_labels = dict(
+            self.env["hr.overtime.entry"]._fields["type"].selection
+        )
+
         for rec in records:
-            type_label = dict(rec._fields['type'].selection).get(rec.type)
+            type_label = type_labels.get(rec.type, rec.type)
 
             rec.employee_id.message_post(
-                body=f"Registro creado: {rec.hours} horas ({type_label})",
-                subtype_xmlid="mail.mt_note"
+                body=(
+                    f"Registro creado: "
+                    f"{rec.hours} horas ({type_label})"
+                ),
+                subtype_xmlid="mail.mt_note",
             )
 
         if not self.env.context.get("skip_comp_sync"):
@@ -102,52 +157,135 @@ class HrOvertimeEntry(models.Model):
         return records
 
     def write(self, vals):
-
-        # 🔥 SALTAR VALIDACIÓN EN MIGRACIÓN
-        if self.env.context.get('skip_overtime_limit'):
+        if self.env.context.get("skip_overtime_limit"):
             return super().write(vals)
 
+        old_values = {}
+
         for rec in self:
-            if any(field in vals for field in ['hours', 'type', 'state']):
+            old_values[rec.id] = {
+                "employee_id": rec.employee_id,
+                "hours": rec.hours,
+                "type": rec.type,
+                "state": rec.state,
+            }
 
-                new_type = vals.get('type', rec.type)
-                new_state = vals.get('state', rec.state)
-                new_hours = vals.get('hours', rec.hours)
-
-                if new_type == 'extra' and new_state == 'done':
-                    fake = rec.new({
-                        'employee_id': rec.employee_id.id,
-                        'hours': new_hours,
-                        'type': new_type,
-                        'state': new_state,
-                    })
-
-                    future_balance = self._get_total_balance(rec.employee_id) \
-                                     - rec._get_signed_hours() \
-                                     + fake._get_signed_hours()
-
-                    if future_balance > self.MAX_HOURS:
-                        raise UserError(
-                            f"El empleado tiene actualmente {round(self._get_total_balance(rec.employee_id), 2)} horas.\n\n"
-                            f"El nuevo saldo sería {round(future_balance, 2)} horas.\n\n"
-                            f"No puede superar el límite de {self.MAX_HOURS} horas.\n\n"
-                            f"Reduce las horas o compensa antes de añadir más."
-                        )
-
-        res = super().write(vals)
-
-        # LOG
         for rec in self:
-            rec.employee_id.message_post(
-                body=f"Actualización overtime: {rec.hours}h ({rec.type})"
+            new_employee = self.env["hr.employee"].browse(
+                vals.get("employee_id", rec.employee_id.id)
+            ).exists()
+
+            new_hours = vals.get("hours", rec.hours)
+            new_type = vals.get("type", rec.type)
+            new_state = vals.get("state", rec.state)
+
+            if not new_employee or new_state != "done":
+                continue
+
+            simulated_entry = self.new({
+                "employee_id": new_employee.id,
+                "hours": new_hours,
+                "type": new_type,
+                "state": new_state,
+            })
+
+            new_signed_hours = simulated_entry._get_signed_hours()
+
+            current_balance = self._get_total_balance(new_employee)
+
+            # Si el registro ya estaba confirmado para ese mismo empleado,
+            # quitamos primero su efecto anterior.
+            previous_effect = 0.0
+
+            if (
+                rec.state == "done"
+                and rec.employee_id == new_employee
+            ):
+                previous_effect = rec._get_signed_hours()
+
+            future_balance = (
+                current_balance
+                - previous_effect
+                + new_signed_hours
             )
 
-        if not self.env.context.get("skip_comp_sync") and any(
-            field in vals for field in ["hours", "employee_id", "type", "state", "date"]
+            if future_balance > self.MAX_HOURS:
+                raise UserError(
+                    f"El empleado tiene actualmente "
+                    f"{round(current_balance, 2)} horas acumuladas.\n\n"
+                    f"El nuevo saldo sería "
+                    f"{round(future_balance, 2)} horas.\n\n"
+                    f"No puede superar el límite de "
+                    f"{self.MAX_HOURS} horas."
+                )
+
+            if future_balance < self.MIN_HOURS:
+                raise UserError(
+                    f"El empleado tiene actualmente "
+                    f"{round(current_balance, 2)} horas acumuladas.\n\n"
+                    f"El nuevo saldo sería "
+                    f"{round(future_balance, 2)} horas.\n\n"
+                    f"No puede bajar del límite de "
+                    f"{self.MIN_HOURS} horas."
+                )
+
+        result = super().write(vals)
+
+        type_labels = dict(
+            self.env["hr.overtime.entry"]._fields["type"].selection
+        )
+
+        for rec in self:
+            old = old_values.get(rec.id, {})
+            changes = []
+
+            if "hours" in vals:
+                changes.append(
+                    f"Horas: {old.get('hours', 0.0)} → {rec.hours}"
+                )
+
+            if "type" in vals:
+                old_type = type_labels.get(
+                    old.get("type"),
+                    old.get("type"),
+                )
+                new_type = type_labels.get(rec.type, rec.type)
+
+                changes.append(
+                    f"Tipo: {old_type} → {new_type}"
+                )
+
+            if "state" in vals:
+                changes.append(
+                    f"Estado: "
+                    f"{old.get('state', '')} → {rec.state}"
+                )
+
+            if changes:
+                rec.employee_id.message_post(
+                    body=(
+                        "Actualización overtime: "
+                        + " | ".join(changes)
+                    ),
+                    subtype_xmlid="mail.mt_note",
+                )
+
+        if (
+            not self.env.context.get("skip_comp_sync")
+            and any(
+                field_name in vals
+                for field_name in [
+                    "hours",
+                    "employee_id",
+                    "type",
+                    "state",
+                    "date",
+                ]
+            )
         ):
             self._sync_compensation_allocation()
 
-        return res
+        return result
 
     def action_confirm(self):
         self.with_context(skip_comp_sync=True).write({"state": "done"})
