@@ -148,6 +148,16 @@ class HrAttendance(models.Model):
         week_end = week_start + timedelta(days=6)
 
         return week_start, week_end
+    
+    def _format_hours(self, hours):
+        hours = hours or 0.0
+
+        sign = "-" if hours < 0 else ""
+        total_minutes = round(abs(hours) * 60)
+
+        hour_part, minute_part = divmod(total_minutes, 60)
+
+        return f"{sign}{hour_part:02d}:{minute_part:02d}"
 
     def _get_utc_week_range(
         self,
@@ -180,19 +190,113 @@ class HrAttendance(models.Model):
         )
 
         return utc_start, utc_end
+    
+    def _get_expected_hours_for_day(
+        self,
+        employee,
+        day,
+    ):
+        calendar = employee.resource_calendar_id
+        resource = employee.resource_id
+
+        if not calendar or not resource or not day:
+            return 0.0
+
+        timezone_name = self._get_employee_tz(employee)
+        timezone = pytz.timezone(timezone_name)
+
+        local_start = timezone.localize(
+            datetime.combine(day, time.min)
+        )
+
+        local_end = timezone.localize(
+            datetime.combine(
+                day + timedelta(days=1),
+                time.min,
+            )
+        )
+
+        intervals_by_resource = calendar._work_intervals_batch(
+            local_start,
+            local_end,
+            resources=resource,
+        )
+
+        intervals = (
+            intervals_by_resource.get(resource.id)
+            or intervals_by_resource.get(resource)
+            or []
+        )
+
+        expected_hours = 0.0
+
+        for interval in intervals:
+            interval_start = interval[0]
+            interval_end = interval[1]
+
+            expected_hours += (
+                interval_end - interval_start
+            ).total_seconds() / 3600.0
+
+        return round(expected_hours, 4)
+    
+    def _get_worked_hours_for_day(
+        self,
+        employee,
+        day,
+    ):
+        utc_start, utc_end = self._get_utc_day_range(
+            employee,
+            day,
+        )
+
+        attendances = self.search([
+            ("employee_id", "=", employee.id),
+            (
+                "check_in",
+                ">=",
+                fields.Datetime.to_string(utc_start),
+            ),
+            (
+                "check_in",
+                "<=",
+                fields.Datetime.to_string(utc_end),
+            ),
+            ("check_out", "!=", False),
+        ])
+
+        worked_hours = sum(
+            attendances.mapped("worked_hours")
+        )
+
+        return round(worked_hours, 4)
 
 
     def _sync_overtime_period(self):
         affected_periods = set()
 
         for attendance in self:
-            if attendance.employee_id and attendance.check_in:
-                affected_periods.add(
-                    (
-                        attendance.employee_id.id,
-                        attendance._get_local_day(),
-                    )
+            if not attendance.employee_id or not attendance.check_in:
+                continue
+
+            local_day = attendance._get_local_day()
+
+            if not local_day:
+                continue
+
+            affected_periods.add(
+                (
+                    attendance.employee_id.id,
+                    local_day,
                 )
+            )
+
+            affected_periods.add(
+                (
+                    attendance.employee_id.id,
+                    local_day - timedelta(days=1),
+                )
+            )
 
         for employee_id, local_day in affected_periods:
             self._sync_overtime_for_employee_period(
@@ -233,7 +337,6 @@ class HrAttendance(models.Model):
         employee_id,
         day,
     ):
-
         OvertimeEntry = self.env["hr.overtime.entry"]
 
         employee = self.env["hr.employee"].browse(
@@ -243,10 +346,10 @@ class HrAttendance(models.Model):
         if not employee or not day:
             return
 
-        week_start, week_end = self._get_week_range(day)
+        week_start, _week_end = self._get_week_range(day)
 
-        # Si el empleado vuelve al modo diario, eliminamos el
-        # movimiento semanal correspondiente.
+        # Si el empleado está en modo diario, eliminamos cualquier
+        # registro semanal automático de esa semana.
         weekly_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
             ("date", "=", week_start),
@@ -255,33 +358,6 @@ class HrAttendance(models.Model):
 
         if weekly_entries:
             weekly_entries.unlink()
-
-        start_datetime, end_datetime = self._get_utc_day_range(
-            employee,
-            day,
-        )
-
-        attendances = self.search([
-            ("employee_id", "=", employee.id),
-            (
-                "check_in",
-                ">=",
-                fields.Datetime.to_string(start_datetime),
-            ),
-            (
-                "check_in",
-                "<=",
-                fields.Datetime.to_string(end_datetime),
-            ),
-            ("check_out", "!=", False),
-        ])
-
-        overtime_total = sum(
-            self._get_attendance_overtime_value(attendance)
-            for attendance in attendances
-        )
-
-        overtime_total = round(overtime_total, 4)
 
         existing_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
@@ -295,22 +371,52 @@ class HrAttendance(models.Model):
         if duplicate_entries:
             duplicate_entries.unlink()
 
-        if abs(overtime_total) < 0.01:
+        today = fields.Date.context_today(self)
+
+        # No consolidamos el día actual ni fechas futuras.
+        # Así una jornada partida no genera un -04:00 después
+        # del fichaje de la mañana.
+        if day >= today:
             if main_entry:
                 main_entry.unlink()
 
             return
 
-        if overtime_total > 0:
+        expected_hours = self._get_expected_hours_for_day(
+            employee,
+            day,
+        )
+
+        worked_hours = self._get_worked_hours_for_day(
+            employee,
+            day,
+        )
+
+        difference = round(
+            worked_hours - expected_hours,
+            4,
+        )
+
+        # Día no laborable y sin asistencias.
+        if expected_hours == 0.0 and worked_hours == 0.0:
+            if main_entry:
+                main_entry.unlink()
+
+            return
+
+        # No existe diferencia relevante.
+        if abs(difference) < 0.01:
+            if main_entry:
+                main_entry.unlink()
+
+            return
+
+        if difference > 0:
             entry_type = "extra"
-            entry_hours = overtime_total
+            entry_hours = difference
         else:
             entry_type = "early_exit"
-            entry_hours = abs(overtime_total)
-
-        worked_hours = sum(attendances.mapped("worked_hours"))
-
-        expected_hours = worked_hours - overtime_total
+            entry_hours = abs(difference)
 
         values = {
             "employee_id": employee.id,
@@ -322,12 +428,16 @@ class HrAttendance(models.Model):
             "expected_hours": expected_hours,
             "worked_hours": worked_hours,
             "description": (
-                f"Movimiento diario automático. "
-                f"Trabajadas: {worked_hours:.2f} h. "
-                f"Previstas: {expected_hours:.2f} h."
+                "Movimiento diario automático.\n"
+                f"Horas trabajadas: "
+                f"{self._format_hours(worked_hours)}\n"
+                f"Horas previstas: "
+                f"{self._format_hours(expected_hours)}\n"
+                f"Diferencia: "
+                f"{self._format_hours(difference)}"
             ),
         }
-        
+
         context_values = {
             "skip_overtime_limit": True,
             "skip_comp_sync": True,
@@ -543,10 +653,10 @@ class HrAttendance(models.Model):
             "expected_hours": expected_hours,
             "worked_hours": worked_hours,
             "description": (
-                f"Semana del {week_start.strftime('%d/%m/%Y')} "
-                f"al {week_end.strftime('%d/%m/%Y')}. "
-                f"Trabajadas: {worked_hours:.2f} h. "
-                f"Previstas: {expected_hours:.2f} h."
+                f"Resumen semanal ({week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')})\n"
+                f"Horas trabajadas: {self._format_hours(worked_hours)}\n"
+                f"Horas previstas: {self._format_hours(expected_hours)}\n"
+                f"Diferencia: {self._format_hours(difference)}"
             ),
         }
 
