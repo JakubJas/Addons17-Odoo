@@ -308,6 +308,10 @@ class HrAttendance(models.Model):
             entry_type = "early_exit"
             entry_hours = abs(overtime_total)
 
+        worked_hours = sum(attendances.mapped("worked_hours"))
+
+        expected_hours = worked_hours - overtime_total
+
         values = {
             "employee_id": employee.id,
             "date": day,
@@ -315,12 +319,15 @@ class HrAttendance(models.Model):
             "type": entry_type,
             "state": "done",
             "reference": self.AUTO_REF_DAY,
+            "expected_hours": expected_hours,
+            "worked_hours": worked_hours,
             "description": (
-                "Movimiento diario generado automáticamente "
-                "desde asistencias."
+                f"Movimiento diario automático. "
+                f"Trabajadas: {worked_hours:.2f} h. "
+                f"Previstas: {expected_hours:.2f} h."
             ),
         }
-
+        
         context_values = {
             "skip_overtime_limit": True,
             "skip_comp_sync": True,
@@ -533,12 +540,13 @@ class HrAttendance(models.Model):
             "hours": entry_hours,
             "state": "done",
             "reference": self.AUTO_REF_WEEK,
+            "expected_hours": expected_hours,
+            "worked_hours": worked_hours,
             "description": (
-                f"Semana del "
-                f"{week_start.strftime('%d/%m/%Y')} "
+                f"Semana del {week_start.strftime('%d/%m/%Y')} "
                 f"al {week_end.strftime('%d/%m/%Y')}. "
-                f"Horas trabajadas: {worked_hours:.2f}. "
-                f"Horas previstas: {expected_hours:.2f}."
+                f"Trabajadas: {worked_hours:.2f} h. "
+                f"Previstas: {expected_hours:.2f} h."
             ),
         }
 
