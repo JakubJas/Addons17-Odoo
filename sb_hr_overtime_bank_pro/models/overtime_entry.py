@@ -13,6 +13,16 @@ class HrOvertimeEntry(models.Model):
     employee_id = fields.Many2one("hr.employee", required=True)
     date = fields.Date(default=fields.Date.today, tracking=True)
     hours = fields.Float(tracking=True)
+    
+    check_in = fields.Datetime(
+        string="Entrada",
+        tracking=True,
+    )
+
+    check_out = fields.Datetime(
+        string="Salida",
+        tracking=True,
+    )
 
     type = fields.Selection([
         ("extra", "Generar banco de horas extras"),
