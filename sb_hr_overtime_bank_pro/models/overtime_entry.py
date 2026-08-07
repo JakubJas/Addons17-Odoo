@@ -1,5 +1,6 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
+from datetime import timedelta
 
 
 class HrOvertimeEntry(models.Model):
@@ -22,6 +23,12 @@ class HrOvertimeEntry(models.Model):
     check_out = fields.Datetime(
         string="Salida",
         tracking=True,
+    )
+    
+    attendance_ids = fields.Many2many(
+        "hr.attendance",
+        string="Asistencias de la semana",
+        compute="_compute_attendance_ids",
     )
 
     type = fields.Selection([
@@ -69,6 +76,46 @@ class HrOvertimeEntry(models.Model):
         tracking=True,
         help="Diferencia entre las horas trabajadas y las horas previstas.",
     )
+
+    @api.depends("employee_id", "date", "reference")
+    def _compute_attendance_ids(self):
+        for rec in self:
+            rec.attendance_ids = False
+
+            if (
+                rec.reference != "Attendance overtime week"
+                or not rec.employee_id
+                or not rec.date
+            ):
+                continue
+
+            week_start = rec.date
+            week_end = week_start + timedelta(days=6)
+
+            timezone_name = (
+                rec.employee_id.resource_calendar_id.tz
+                or rec.env.user.tz
+                or "UTC"
+            )
+
+            attendances = self.env["hr.attendance"].search([
+                ("employee_id", "=", rec.employee_id.id),
+                ("check_in", "!=", False),
+                ("check_out", "!=", False),
+            ])
+
+            week_attendances = self.env["hr.attendance"]
+
+            for attendance in attendances:
+                local_check_in = fields.Datetime.context_timestamp(
+                    attendance.with_context(tz=timezone_name),
+                    attendance.check_in,
+                )
+
+                if week_start <= local_check_in.date() <= week_end:
+                    week_attendances |= attendance
+
+            rec.attendance_ids = week_attendances
 
     def _get_total_balance(self, employee):
         entries = self.search([

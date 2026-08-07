@@ -13,10 +13,75 @@ class HrAttendance(models.Model):
         string="Overtime Entry",
         copy=False,
     )
+    
+    attendance_local_date = fields.Date(
+        string="Fecha",
+        compute="_compute_attendance_local_values",
+    )
+
+    attendance_local_check_in = fields.Char(
+        string="Entrada",
+        compute="_compute_attendance_local_values",
+    )
+
+    attendance_local_check_out = fields.Char(
+        string="Salida",
+        compute="_compute_attendance_local_values",
+    )
 
     AUTO_REF_OLD = "Attendance overtime"
     AUTO_REF_DAY = "Attendance overtime day"
     AUTO_REF_WEEK = "Attendance overtime week"
+
+
+
+    @api.depends(
+        "check_in",
+        "check_out",
+        "employee_id",
+        "employee_id.resource_calendar_id",
+    )
+    def _compute_attendance_local_values(self):
+        for rec in self:
+
+            rec.attendance_local_date = False
+            rec.attendance_local_check_in = False
+            rec.attendance_local_check_out = False
+
+            timezone_name = (
+                rec.employee_id.resource_calendar_id.tz
+                if rec.employee_id
+                and rec.employee_id.resource_calendar_id
+                else False
+            )
+
+            timezone_name = (
+                timezone_name
+                or self.env.user.tz
+                or "UTC"
+            )
+
+            if rec.check_in:
+                local_check_in = fields.Datetime.context_timestamp(
+                    rec.with_context(tz=timezone_name),
+                    rec.check_in,
+                )
+
+                rec.attendance_local_date = local_check_in.date()
+
+                rec.attendance_local_check_in = (
+                    local_check_in.strftime("%H:%M")
+                )
+
+            if rec.check_out:
+                local_check_out = fields.Datetime.context_timestamp(
+                    rec.with_context(tz=timezone_name),
+                    rec.check_out,
+                )
+
+                rec.attendance_local_check_out = (
+                    local_check_out.strftime("%H:%M")
+                )
 
     @api.model
     def create(self, vals):
