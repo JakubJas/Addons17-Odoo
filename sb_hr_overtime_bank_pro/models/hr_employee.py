@@ -4,9 +4,10 @@ from odoo import models, fields, api
 class HrEmployee(models.Model):
     _inherit = "hr.employee"
 
-    overtime_entry_ids = fields.One2many(
-        "hr.overtime.entry",
-        "employee_id"
+    overtime_period_ids = fields.One2many(
+        "hr.employee.overtime.period",
+        "employee_id",
+        string="Historial de modalidades Overtime",
     )
 
     overtime_balance = fields.Float(
@@ -30,6 +31,20 @@ class HrEmployee(models.Model):
             "Fecha a partir de la cual el banco de horas se calcula "
             "semanalmente. Las fechas anteriores mantienen el cálculo diario."
         ),
+    )
+    
+    overtime_current_mode = fields.Selection(
+        [
+            ("daily", "Diario"),
+            ("weekly", "Semanal flexible"),
+        ],
+        string="Modalidad actual",
+        compute="_compute_overtime_current_mode",
+        store=False,
+    )
+
+    overtime_change_date = fields.Date(
+        string="Aplicar desde",
     )
 
     @api.depends("overtime_entry_ids.hours", "overtime_entry_ids.type", "overtime_entry_ids.state")

@@ -4,6 +4,7 @@
         <field name="name">hr.employee.overtime</field>
         <field name="model">hr.employee</field>
         <field name="inherit_id" ref="hr.view_employee_form"/>
+
         <field name="arch" type="xml">
 
             <xpath expr="//sheet/notebook" position="inside">
@@ -14,6 +15,7 @@
                 >
 
                     <group>
+
                         <button
                             name="%(action_create_overtime_entry)d"
                             type="action"
@@ -21,25 +23,141 @@
                             context="{'default_employee_id': active_id}"
                             class="btn-primary"
                         />
+
                     </group>
 
-                    <group string="Configuración">
-                        <field name="resource_calendar_id" readonly="1"/>
-                        <field name="overtime_calculation_mode"/>
-                        <field name="overtime_weekly_from" invisible="overtime_calculation_mode != 'weekly'"/>
+                    <group string="Configuración del cálculo">
+
+                        <group>
+
+                            <field
+                                name="resource_calendar_id"
+                                string="Horario de trabajo"
+                                readonly="1"
+                            />
+
+                            <field
+                                name="overtime_current_mode"
+                                string="Modalidad actual"
+                                readonly="1"
+                            />
+
+                            <field
+                                name="overtime_balance"
+                                string="Saldo banco de horas"
+                                widget="float_time"
+                                readonly="1"
+                            />
+
+                        </group>
+
+
+                        <group>
+
+                            <field
+                                name="overtime_new_mode"
+                                string="Nueva modalidad"
+                            />
+
+                            <field
+                                name="overtime_change_date"
+                                string="Aplicar desde"
+                            />
+
+                            <button
+                                name="action_apply_overtime_mode_change"
+                                string="Aplicar cambio"
+                                type="object"
+                                class="btn-primary"
+                            />
+
+                        </group>
+
                     </group>
+
+                    <separator string="HISTORIAL DE MODALIDADES"/>
+
+                    <field
+                        name="overtime_period_ids"
+                        nolabel="1"
+                        readonly="1"
+                    >
+
+                        <tree
+                            create="0"
+                            edit="0"
+                            delete="0"
+                        >
+
+                            <field
+                                name="date_from"
+                                string="Desde"
+                            />
+
+                            <field
+                                name="date_to"
+                                string="Hasta"
+                            />
+
+                            <field
+                                name="calculation_mode"
+                                string="Modalidad"
+                            />
+
+                        </tree>
+
+                    </field>
+
+                    <group string="Mantenimiento">
+
+                        <button
+                            name="action_rebuild_overtime_history"
+                            string="Reconstruir histórico automático"
+                            type="object"
+                            class="btn-secondary"
+                            confirm="Se reconstruirán únicamente los movimientos automáticos de este empleado. Los movimientos manuales, pagos y compensaciones no se eliminarán. ¿Continuar?"
+                        />
+
+                    </group>
+
+                    <separator string="MOVIMIENTOS OVERTIME"/>
 
                     <field
                         name="overtime_entry_ids"
                         groups="sb_hr_overtime_bank_pro.group_overtime_hr, sb_hr_overtime_bank_pro.group_overtime_admin"
                     >
+
                         <tree>
-                            <field name="date" string="Fecha"/>
-                            <field name="type" string="Tipo"/>
-                            <field name="hours" string="Horas" widget="float_time"/>
-                            <field name="reference" string="Referencia"/>
-                            <field name="state" string="Estado"/>
+
+                            <field
+                                name="date"
+                                string="Fecha"
+                            />
+
+                            <field
+                                name="type"
+                                string="Tipo"
+                            />
+
+                            <field
+                                name="signed_hours"
+                                string="Horas"
+                                widget="float_time"
+                                sum="Total"
+                            />
+
+                            <field
+                                name="reference"
+                                string="Referencia"
+                            />
+
+                            <field
+                                name="state"
+                                string="Estado"
+                            />
+
                         </tree>
+
                     </field>
 
                 </page>
@@ -47,6 +165,7 @@
             </xpath>
 
         </field>
+
     </record>
 
 </odoo>

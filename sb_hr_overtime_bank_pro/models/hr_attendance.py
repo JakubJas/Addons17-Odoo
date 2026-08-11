@@ -381,29 +381,23 @@ class HrAttendance(models.Model):
         if not employee or not local_day:
             return
 
-        calculation_mode = (
-            employee.overtime_calculation_mode
-            or "daily"
+        mode = employee._get_overtime_mode_for_date(
+            local_day
         )
 
-        weekly_from = employee.overtime_weekly_from
-
-        if (
-            calculation_mode == "weekly"
-            and weekly_from
-        ):
-            if local_day >= weekly_from:
-                return self._sync_overtime_for_employee_week(
-                    employee.id,
-                    local_day,
-                )
-
-            return self._sync_historical_overtime_for_employee_day(
+        if mode == "weekly":
+            return self._sync_overtime_for_employee_week(
                 employee.id,
                 local_day,
             )
 
-        return self._sync_overtime_for_employee_day(
+        if mode == "daily":
+            return self._sync_overtime_for_employee_day(
+                employee.id,
+                local_day,
+            )
+
+        return self._sync_historical_overtime_for_employee_day(
             employee.id,
             local_day,
         )
@@ -567,7 +561,10 @@ class HrAttendance(models.Model):
             for att in attendances
         )
 
-        overtime_total = round(overtime_total, 4)
+        overtime_total = round(
+            overtime_total,
+            4,
+        )
 
         existing_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
@@ -584,7 +581,16 @@ class HrAttendance(models.Model):
         if abs(overtime_total) < 0.01:
             if main_entry:
                 main_entry.unlink()
+
             return
+
+        worked_hours = sum(
+            attendances.mapped("worked_hours")
+        )
+
+        expected_hours = (
+            worked_hours - overtime_total
+        )
 
         if overtime_total > 0:
             entry_type = "extra"
@@ -592,12 +598,6 @@ class HrAttendance(models.Model):
         else:
             entry_type = "early_exit"
             entry_hours = abs(overtime_total)
-
-        worked_hours = sum(
-            attendances.mapped("worked_hours")
-        )
-
-        expected_hours = worked_hours - overtime_total
 
         values = {
             "employee_id": employee.id,
@@ -609,7 +609,8 @@ class HrAttendance(models.Model):
             "expected_hours": expected_hours,
             "worked_hours": worked_hours,
             "description": (
-                "Movimiento histórico reconstruido desde Asistencias"
+                "Movimiento histórico reconstruido "
+                "desde Asistencias"
             ),
         }
 
@@ -626,6 +627,73 @@ class HrAttendance(models.Model):
             OvertimeEntry.with_context(
                 **context_values
             ).create(values)
+            
+    @api.model
+    def _rebuild_employee_overtime_from_date(
+        self,
+        employee,
+        date_from,
+    ):
+        if not employee or not date_from:
+            return True
+
+        OvertimeEntry = self.env[
+            "hr.overtime.entry"
+        ]
+
+        automatic_entries = OvertimeEntry.search([
+            ("employee_id", "=", employee.id),
+            ("date", ">=", date_from),
+            (
+                "reference",
+                "in",
+                [
+                    self.AUTO_REF_OLD,
+                    self.AUTO_REF_DAY,
+                    self.AUTO_REF_WEEK,
+                ],
+            ),
+        ])
+
+        if automatic_entries:
+            automatic_entries.with_context(
+                skip_overtime_limit=True,
+                skip_comp_sync=True,
+            ).unlink()
+
+        start_dt, _end_dt = self._get_utc_day_range(
+            employee,
+            date_from,
+        )
+
+        attendances = self.search([
+            ("employee_id", "=", employee.id),
+            (
+                "check_in",
+                ">=",
+                fields.Datetime.to_string(start_dt),
+            ),
+            ("check_out", "!=", False),
+        ], order="check_in asc")
+
+        affected_days = set()
+
+        for attendance in attendances:
+            local_day = attendance._get_local_day()
+
+            if (
+                local_day
+                and local_day >= date_from
+            ):
+                affected_days.add(local_day)
+
+        for local_day in sorted(affected_days):
+            self._sync_overtime_for_employee_period(
+                employee.id,
+                local_day,
+            )
+
+        return True
 
     def _get_expected_hours_for_week(
         self,
@@ -851,54 +919,29 @@ class HrAttendance(models.Model):
 
     @api.model
     def rebuild_attendance_overtime_entries(self):
-        OvertimeEntry = self.env["hr.overtime.entry"]
+        employees = self.env[
+            "hr.employee"
+        ].search([])
 
-        # SOLO automáticos.
-        # No toca pagos, compensaciones, ajustes ni entradas manuales.
-        automatic_entries = OvertimeEntry.search([
-            ("reference", "in", [
-                self.AUTO_REF_OLD,
-                self.AUTO_REF_DAY,
-                self.AUTO_REF_WEEK,
-            ])
-        ])
+        for employee in employees:
 
-        if automatic_entries:
-            automatic_entries.unlink()
+            first_attendance = self.search([
+                ("employee_id", "=", employee.id),
+                ("check_in", "!=", False),
+                ("check_out", "!=", False),
+            ], order="check_in asc", limit=1)
 
-        affected_periods = set()
-
-        attendances = self.search([
-            ("employee_id", "!=", False),
-            ("check_in", "!=", False),
-            ("check_out", "!=", False),
-        ])
-
-        for attendance in attendances:
-            local_day = attendance._get_local_day()
-
-            if not local_day:
+            if not first_attendance:
                 continue
 
-            affected_periods.add(
-                (
-                    attendance.employee_id.id,
-                    local_day,
-                )
-            )
+            first_day = first_attendance._get_local_day()
 
-        for employee_id, local_day in affected_periods:
-            self._sync_overtime_for_employee_period(
-                employee_id,
-                local_day,
-            )
+            if not first_day:
+                continue
 
-        return True
-
-        for employee_id, local_day in affected_periods:
-            self._sync_overtime_for_employee_period(
-                employee_id,
-                local_day,
+            self._rebuild_employee_overtime_from_date(
+                employee,
+                first_day,
             )
 
         return True
