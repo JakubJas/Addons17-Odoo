@@ -374,7 +374,6 @@ class HrAttendance(models.Model):
         employee_id,
         local_day,
     ):
-
         employee = self.env["hr.employee"].browse(
             employee_id
         ).exists()
@@ -383,11 +382,23 @@ class HrAttendance(models.Model):
             return
 
         calculation_mode = (
-            employee.overtime_calculation_mode or "daily"
+            employee.overtime_calculation_mode
+            or "daily"
         )
 
-        if calculation_mode == "weekly":
-            return self._sync_overtime_for_employee_week(
+        weekly_from = employee.overtime_weekly_from
+
+        if (
+            calculation_mode == "weekly"
+            and weekly_from
+        ):
+            if local_day >= weekly_from:
+                return self._sync_overtime_for_employee_week(
+                    employee.id,
+                    local_day,
+                )
+
+            return self._sync_historical_overtime_for_employee_day(
                 employee.id,
                 local_day,
             )
@@ -500,6 +511,105 @@ class HrAttendance(models.Model):
                 f"{self._format_hours(expected_hours)}\n"
                 f"Diferencia: "
                 f"{self._format_hours(difference)}"
+            ),
+        }
+
+        context_values = {
+            "skip_overtime_limit": True,
+            "skip_comp_sync": True,
+        }
+
+        if main_entry:
+            main_entry.with_context(
+                **context_values
+            ).write(values)
+        else:
+            OvertimeEntry.with_context(
+                **context_values
+            ).create(values)
+            
+    def _sync_historical_overtime_for_employee_day(
+        self,
+        employee_id,
+        day,
+    ):
+        OvertimeEntry = self.env["hr.overtime.entry"]
+
+        employee = self.env["hr.employee"].browse(
+            employee_id
+        ).exists()
+
+        if not employee or not day:
+            return
+
+        start_dt, end_dt = self._get_utc_day_range(
+            employee,
+            day,
+        )
+
+        attendances = self.search([
+            ("employee_id", "=", employee.id),
+            (
+                "check_in",
+                ">=",
+                fields.Datetime.to_string(start_dt),
+            ),
+            (
+                "check_in",
+                "<=",
+                fields.Datetime.to_string(end_dt),
+            ),
+            ("check_out", "!=", False),
+        ])
+
+        overtime_total = sum(
+            self._get_attendance_overtime_value(att)
+            for att in attendances
+        )
+
+        overtime_total = round(overtime_total, 4)
+
+        existing_entries = OvertimeEntry.search([
+            ("employee_id", "=", employee.id),
+            ("date", "=", day),
+            ("reference", "=", self.AUTO_REF_DAY),
+        ], order="id asc")
+
+        main_entry = existing_entries[:1]
+        duplicates = existing_entries[1:]
+
+        if duplicates:
+            duplicates.unlink()
+
+        if abs(overtime_total) < 0.01:
+            if main_entry:
+                main_entry.unlink()
+            return
+
+        if overtime_total > 0:
+            entry_type = "extra"
+            entry_hours = overtime_total
+        else:
+            entry_type = "early_exit"
+            entry_hours = abs(overtime_total)
+
+        worked_hours = sum(
+            attendances.mapped("worked_hours")
+        )
+
+        expected_hours = worked_hours - overtime_total
+
+        values = {
+            "employee_id": employee.id,
+            "date": day,
+            "hours": entry_hours,
+            "type": entry_type,
+            "state": "done",
+            "reference": self.AUTO_REF_DAY,
+            "expected_hours": expected_hours,
+            "worked_hours": worked_hours,
+            "description": (
+                "Movimiento histórico reconstruido desde Asistencias"
             ),
         }
 
@@ -741,24 +851,16 @@ class HrAttendance(models.Model):
 
     @api.model
     def rebuild_attendance_overtime_entries(self):
-        """
-        Elimina todos los movimientos automáticos de asistencias
-        y los vuelve a generar según el modo de cada empleado.
-        """
         OvertimeEntry = self.env["hr.overtime.entry"]
 
+        # SOLO automáticos.
+        # No toca pagos, compensaciones, ajustes ni entradas manuales.
         automatic_entries = OvertimeEntry.search([
-            "|",
-            (
-                "reference",
-                "in",
-                [
-                    self.AUTO_REF_OLD,
-                    self.AUTO_REF_DAY,
-                    self.AUTO_REF_WEEK,
-                ],
-            ),
-            ("attendance_id", "!=", False),
+            ("reference", "in", [
+                self.AUTO_REF_OLD,
+                self.AUTO_REF_DAY,
+                self.AUTO_REF_WEEK,
+            ])
         ])
 
         if automatic_entries:
@@ -767,21 +869,31 @@ class HrAttendance(models.Model):
         affected_periods = set()
 
         attendances = self.search([
-            ("check_out", "!=", False),
             ("employee_id", "!=", False),
             ("check_in", "!=", False),
+            ("check_out", "!=", False),
         ])
 
         for attendance in attendances:
             local_day = attendance._get_local_day()
 
-            if local_day:
-                affected_periods.add(
-                    (
-                        attendance.employee_id.id,
-                        local_day,
-                    )
+            if not local_day:
+                continue
+
+            affected_periods.add(
+                (
+                    attendance.employee_id.id,
+                    local_day,
                 )
+            )
+
+        for employee_id, local_day in affected_periods:
+            self._sync_overtime_for_employee_period(
+                employee_id,
+                local_day,
+            )
+
+        return True
 
         for employee_id, local_day in affected_periods:
             self._sync_overtime_for_employee_period(

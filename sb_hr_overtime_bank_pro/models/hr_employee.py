@@ -22,7 +22,14 @@ class HrEmployee(models.Model):
         string="Cálculo horas extra",
         default="daily",
         required=True,
-        help="Define cómo se calculan automáticamente las horas extra de este empleado.",
+    )
+
+    overtime_weekly_from = fields.Date(
+        string="Horario flexible desde",
+        help=(
+            "Fecha a partir de la cual el banco de horas se calcula "
+            "semanalmente. Las fechas anteriores mantienen el cálculo diario."
+        ),
     )
 
     @api.depends("overtime_entry_ids.hours", "overtime_entry_ids.type", "overtime_entry_ids.state")

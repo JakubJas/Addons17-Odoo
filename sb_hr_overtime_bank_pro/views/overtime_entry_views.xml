@@ -144,37 +144,36 @@
 
                     </group>
 
-                    <group string="DETALLE SEMANAL"
+                    <separator string="DETALLE SEMANAL"
+                            invisible="reference != 'Attendance overtime week'"/>
+
+                    <field name="attendance_ids"
+                        nolabel="1"
+                        readonly="1"
                         invisible="reference != 'Attendance overtime week'">
 
-                        <field name="attendance_ids"
-                            nolabel="1"
-                            readonly="1">
+                        <tree create="0"
+                            edit="0"
+                            delete="0"
+                            default_order="check_in asc">
 
-                            <tree create="0"
-                                edit="0"
-                                delete="0"
-                                default_order="check_in asc">
+                            <field name="attendance_local_date"
+                                string="Fecha"/>
 
-                                <field name="attendance_local_date"
-                                    string="Fecha"/>
+                            <field name="attendance_local_check_in"
+                                string="Entrada"/>
 
-                                <field name="attendance_local_check_in"
-                                    string="Entrada"/>
+                            <field name="attendance_local_check_out"
+                                string="Salida"/>
 
-                                <field name="attendance_local_check_out"
-                                    string="Salida"/>
+                            <field name="worked_hours"
+                                string="Horas trabajadas"
+                                widget="float_time"
+                                sum="Total trabajado"/>
 
-                                <field name="worked_hours"
-                                    string="Horas trabajadas"
-                                    widget="float_time"
-                                    sum="Total trabajado"/>
+                        </tree>
 
-                            </tree>
-
-                        </field>
-
-                    </group>
+                    </field>
 
                     <group string="INFORMACIÓN">
 

@@ -26,7 +26,7 @@
                     <group string="Configuración">
                         <field name="resource_calendar_id" readonly="1"/>
                         <field name="overtime_calculation_mode"/>
-                        <field name="overtime_balance" widget="float_time" readonly="1"/>
+                        <field name="overtime_weekly_from" invisible="overtime_calculation_mode != 'weekly'"/>
                     </group>
 
                     <field
