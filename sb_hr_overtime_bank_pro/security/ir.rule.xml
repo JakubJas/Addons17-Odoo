@@ -8,4 +8,20 @@
         <field name="domain_force">[('employee_id.user_id', '=', user.id)]</field>
     </record>
 
+    <!-- RRHH: ve las horas de todos los empleados -->
+    <record id="rule_overtime_hr_all" model="ir.rule">
+        <field name="name">Overtime HR sees all records</field>
+        <field name="model_id" ref="model_hr_overtime_entry"/>
+        <field name="groups" eval="[(4, ref('sb_hr_overtime_bank_pro.group_overtime_hr'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+
+    <!-- Admin: ve las horas de todos los empleados -->
+    <record id="rule_overtime_admin_all" model="ir.rule">
+        <field name="name">Overtime Admin sees all records</field>
+        <field name="model_id" ref="model_hr_overtime_entry"/>
+        <field name="groups" eval="[(4, ref('sb_hr_overtime_bank_pro.group_overtime_admin'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+
 </odoo>

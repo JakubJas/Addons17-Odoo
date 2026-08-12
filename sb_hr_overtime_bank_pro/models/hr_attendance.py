@@ -918,30 +918,33 @@ class HrAttendance(models.Model):
             ).create(values)
 
     @api.model
+    def _rebuild_overtime_history_for_employee(self, employee):
+        first_attendance = self.search([
+            ("employee_id", "=", employee.id),
+            ("check_in", "!=", False),
+            ("check_out", "!=", False),
+        ], order="check_in asc", limit=1)
+
+        if not first_attendance:
+            return True
+
+        first_day = first_attendance._get_local_day()
+
+        if not first_day:
+            return True
+
+        return self._rebuild_employee_overtime_from_date(
+            employee,
+            first_day,
+        )
+
+    @api.model
     def rebuild_attendance_overtime_entries(self):
         employees = self.env[
             "hr.employee"
         ].search([])
 
         for employee in employees:
-
-            first_attendance = self.search([
-                ("employee_id", "=", employee.id),
-                ("check_in", "!=", False),
-                ("check_out", "!=", False),
-            ], order="check_in asc", limit=1)
-
-            if not first_attendance:
-                continue
-
-            first_day = first_attendance._get_local_day()
-
-            if not first_day:
-                continue
-
-            self._rebuild_employee_overtime_from_date(
-                employee,
-                first_day,
-            )
+            self._rebuild_overtime_history_for_employee(employee)
 
         return True

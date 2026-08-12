@@ -7,3 +7,5 @@ access_overtime_report_wizard_hr,overtime.report.wizard,model_overtime_report_wi
 access_overtime_report_wizard_admin,overtime.report.wizard,model_overtime_report_wizard,sb_hr_overtime_bank_pro.group_overtime_admin,1,1,1,1
 access_hr_employee_overtime_period_hr,hr.employee.overtime.period.hr,model_hr_employee_overtime_period,sb_hr_overtime_bank_pro.group_overtime_hr,1,1,1,0
 access_hr_employee_overtime_period_admin,hr.employee.overtime.period.admin,model_hr_employee_overtime_period,sb_hr_overtime_bank_pro.group_overtime_admin,1,1,1,1
+access_overtime_payment_hr,hr.overtime.payment.hr,model_hr_overtime_payment,sb_hr_overtime_bank_pro.group_overtime_hr,1,1,1,1
+access_overtime_payment_admin,hr.overtime.payment.admin,model_hr_overtime_payment,sb_hr_overtime_bank_pro.group_overtime_admin,1,1,1,1

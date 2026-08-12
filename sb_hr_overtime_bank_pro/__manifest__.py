@@ -16,6 +16,7 @@
     "data": [
         'security/security.xml',
         "security/ir.model.access.csv",
+        "security/ir.rule.xml",
         "views/overtime_report_wizard_views.xml",
         "views/overtime_entry_views.xml",
         "views/overtime_employee_views.xml",
