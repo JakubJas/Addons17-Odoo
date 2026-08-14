@@ -59,6 +59,11 @@
                                 string="Nueva modalidad"
                             />
 
+                            <field name="overtime_new_weekly_hours"
+                                string="Horas semanales previstas"
+                                widget="float_time"
+                                invisible="overtime_new_mode != 'weekly'"/>
+
                             <field
                                 name="overtime_change_date"
                                 string="Aplicar desde"
@@ -102,6 +107,12 @@
                             <field
                                 name="calculation_mode"
                                 string="Modalidad"
+                            />
+
+                            <field name="weekly_expected_hours"
+                                string="Horas semanales"
+                                widget="float_time"
+                                invisible="calculation_mode != 'weekly'"
                             />
 
                         </tree>

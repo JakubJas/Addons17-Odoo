@@ -63,6 +63,14 @@ class HrEmployee(models.Model):
     overtime_change_date = fields.Date(
         string="Aplicar desde",
     )
+    
+    overtime_new_weekly_hours = fields.Float(
+        string="Horas semanales previstas",
+        store=False,
+        help=(
+            "Horas semanales que se congelarán para el nuevo periodo flexible."
+        ),
+    )
 
     @api.depends("overtime_entry_ids.hours", "overtime_entry_ids.type", "overtime_entry_ids.state")
     def _compute_overtime_balance(self):
@@ -122,6 +130,15 @@ class HrEmployee(models.Model):
             raise UserError(
                 "Debes indicar desde qué fecha se aplicará el cambio."
             )
+            
+        if (
+            new_mode == "weekly"
+            and not self.overtime_new_weekly_hours
+        ):
+            raise UserError(
+                "Debes indicar las horas semanales previstas "
+                "para el periodo flexible."
+            )
 
         new_mode = self.overtime_new_mode
         change_date = self.overtime_change_date
@@ -165,10 +182,16 @@ class HrEmployee(models.Model):
             "date_from": change_date,
             "date_to": False,
             "calculation_mode": new_mode,
+            "weekly_expected_hours": (
+                self.overtime_new_weekly_hours
+                if new_mode == "weekly"
+                else 0.0
+            ),
         })
 
         self.overtime_new_mode = False
         self.overtime_change_date = False
+        self.overtime_new_weekly_hours = False
 
         today = fields.Date.context_today(self)
 

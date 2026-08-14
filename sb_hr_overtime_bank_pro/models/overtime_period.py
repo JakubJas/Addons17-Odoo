@@ -36,6 +36,29 @@ class HrEmployeeOvertimePeriod(models.Model):
         string="Modalidad",
         required=True,
     )
+    
+    weekly_expected_hours = fields.Float(
+        string="Horas semanales previstas",
+        help=(
+            "Horas semanales que deben utilizarse durante este periodo "
+            "flexible. Este valor queda congelado para preservar el histórico."
+        ),
+    )
+
+    @api.constrains(
+        "calculation_mode",
+        "weekly_expected_hours",
+    )
+    def _check_weekly_expected_hours(self):
+        for rec in self:
+            if (
+                rec.calculation_mode == "weekly"
+                and rec.weekly_expected_hours <= 0
+            ):
+                raise ValidationError(
+                    "En modalidad semanal flexible debes indicar "
+                    "las horas semanales previstas."
+                )
 
     @api.constrains("date_from", "date_to")
     def _check_dates(self):

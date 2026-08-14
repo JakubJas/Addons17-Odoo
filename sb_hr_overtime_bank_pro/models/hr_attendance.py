@@ -765,53 +765,32 @@ class HrAttendance(models.Model):
         week_start,
         week_end,
     ):
+        """
+        Obtiene las horas semanales congeladas en el periodo
+        histórico correspondiente.
+        """
 
-        calendar = employee.resource_calendar_id
-        resource = employee.resource_id
+        period = self.env[
+            "hr.employee.overtime.period"
+        ].search([
+            ("employee_id", "=", employee.id),
+            ("date_from", "<=", week_start),
+            "|",
+            ("date_to", "=", False),
+            ("date_to", ">=", week_end),
+            ("calculation_mode", "=", "weekly"),
+        ], order="date_from desc", limit=1)
 
-        if not calendar or not resource:
-            return 0.0
-
-        timezone_name = self._get_employee_tz(employee)
-        timezone = pytz.timezone(timezone_name)
-
-        local_start = timezone.localize(
-            datetime.combine(week_start, time.min)
-        )
-
-        # El final se establece al comienzo del día siguiente.
-        # _work_intervals_batch trabaja mejor con rangos [inicio, fin).
-        local_end = timezone.localize(
-            datetime.combine(
-                week_end + timedelta(days=1),
-                time.min,
+        if period and period.weekly_expected_hours:
+            return round(
+                period.weekly_expected_hours,
+                4,
             )
-        )
 
-        intervals_by_resource = calendar._work_intervals_batch(
-            local_start,
-            local_end,
-            resources=resource,
-        )
-
-        # Compatibilidad con posibles claves resource.id o resource.
-        intervals = (
-            intervals_by_resource.get(resource.id)
-            or intervals_by_resource.get(resource)
-            or []
-        )
-
-        expected_hours = 0.0
-
-        for interval in intervals:
-            interval_start = interval[0]
-            interval_end = interval[1]
-
-            expected_hours += (
-                interval_end - interval_start
-            ).total_seconds() / 3600.0
-
-        return round(expected_hours, 4)
+        # Fallback de seguridad:
+        # si no existe periodo correctamente configurado,
+        # no inventamos horas.
+        return 0.0
 
     def _get_worked_hours_for_week(
         self,
