@@ -391,12 +391,8 @@ class HrAttendance(models.Model):
                 local_day,
             )
 
-        if mode == "daily":
-            return self._sync_overtime_for_employee_day(
-                employee.id,
-                local_day,
-            )
-
+        # Diario:
+        # mantenemos el cálculo histórico de Attendance.
         return self._sync_historical_overtime_for_employee_day(
             employee.id,
             local_day,

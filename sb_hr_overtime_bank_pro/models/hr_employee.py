@@ -87,79 +87,110 @@ class HrEmployee(models.Model):
                 mode if mode in ("daily", "weekly") else "daily"
             )
 
-    def _get_overtime_mode_for_date(self, date):
-        """Modalidad de cálculo (diario/semanal) vigente para `date`.
-
-        Prioriza el histórico de periodos (`overtime_period_ids`). Si no hay
-        ningún periodo que cubra esa fecha, se conserva el comportamiento
-        heredado de `overtime_calculation_mode` / `overtime_weekly_from`
-        para no alterar el cálculo de datos anteriores a la primera vez que
-        se use el nuevo flujo de cambio de modalidad. Puede devolver
-        "historical" cuando la fecha es anterior al inicio del modo semanal
-        heredado, en cuyo caso el llamador debe reconstruir a partir de las
-        horas extra registradas directamente en Asistencias.
-        """
+    def _get_overtime_mode_for_date(self, day):
         self.ensure_one()
 
-        period = self.overtime_period_ids.filtered(
-            lambda p: p.date_from <= date and (not p.date_to or p.date_to >= date)
-        )[:1]
+        if not day:
+            return "daily"
+
+        period = self.env[
+            "hr.employee.overtime.period"
+        ].search([
+            ("employee_id", "=", self.id),
+            ("date_from", "<=", day),
+            "|",
+            ("date_to", "=", False),
+            ("date_to", ">=", day),
+        ], order="date_from desc", limit=1)
 
         if period:
             return period.calculation_mode
 
-        if self.overtime_calculation_mode == "weekly" and self.overtime_weekly_from:
-            if date >= self.overtime_weekly_from:
-                return "weekly"
-            return "historical"
-
-        return self.overtime_calculation_mode or "daily"
+        # Si no existe ningún periodo específico,
+        # mantenemos el comportamiento diario.
+        return "daily"
 
     def action_apply_overtime_mode_change(self):
         self.ensure_one()
 
-        if not self.overtime_new_mode or not self.overtime_change_date:
+        if not self.overtime_new_mode:
             raise UserError(
-                "Selecciona la nueva modalidad y la fecha desde la que "
-                "aplicarla."
+                "Debes seleccionar la nueva modalidad."
             )
 
-        if (
-            self.overtime_new_mode == "weekly"
-            and self.overtime_change_date.weekday() != 0
-        ):
+        if not self.overtime_change_date:
             raise UserError(
-                "Los periodos semanales flexibles deben comenzar un lunes."
+                "Debes indicar desde qué fecha se aplicará el cambio."
             )
 
-        open_period = self.overtime_period_ids.filtered(
-            lambda p: not p.date_to
-        )
-
-        if open_period:
-            if self.overtime_change_date <= open_period.date_from:
-                open_period.unlink()
-            else:
-                open_period.write({
-                    "date_to": self.overtime_change_date - timedelta(days=1),
-                })
-
-        self.env["hr.employee.overtime.period"].create({
-            "employee_id": self.id,
-            "date_from": self.overtime_change_date,
-            "calculation_mode": self.overtime_new_mode,
-        })
-
+        new_mode = self.overtime_new_mode
         change_date = self.overtime_change_date
 
-        self.write({
-            "overtime_new_mode": False,
-            "overtime_change_date": False,
+        Period = self.env["hr.employee.overtime.period"]
+
+        previous_day = change_date - timedelta(days=1)
+
+        previous_mode = self._get_overtime_mode_for_date(
+            previous_day
+        )
+
+        # Si ya tenía esa misma modalidad, NO hacemos rebuild
+        # ni creamos un periodo innecesario.
+        if previous_mode == new_mode:
+            raise UserError(
+                "El empleado ya tenía esta modalidad antes de "
+                "la fecha indicada.\n\n"
+                "No es necesario volver a aplicar el mismo tipo "
+                "de horario."
+            )
+
+        last_period = Period.search([
+            ("employee_id", "=", self.id),
+        ], order="date_from desc, id desc", limit=1)
+
+        if last_period and not last_period.date_to:
+            # Evitamos cerrar un periodo con una fecha inválida
+            if change_date <= last_period.date_from:
+                raise UserError(
+                    "La fecha del nuevo cambio debe ser posterior "
+                    "al inicio del último periodo registrado."
+                )
+
+            last_period.write({
+                "date_to": change_date - timedelta(days=1),
+            })
+
+        Period.create({
+            "employee_id": self.id,
+            "date_from": change_date,
+            "date_to": False,
+            "calculation_mode": new_mode,
         })
 
-        self.env["hr.attendance"]._rebuild_employee_overtime_from_date(
-            self, change_date
-        )
+        self.overtime_new_mode = False
+        self.overtime_change_date = False
+
+        today = fields.Date.context_today(self)
+
+        if change_date <= today:
+            self.env["hr.attendance"]._rebuild_employee_overtime_from_date(
+                self,
+                change_date,
+            )
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Modalidad actualizada",
+                "message": (
+                    f"La modalidad se aplicará desde "
+                    f"{change_date.strftime('%d/%m/%Y')}."
+                ),
+                "type": "success",
+                "sticky": False,
+            },
+        }
 
     def action_rebuild_overtime_history(self):
         for employee in self:
