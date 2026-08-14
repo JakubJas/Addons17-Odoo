@@ -702,9 +702,7 @@ class HrAttendance(models.Model):
         if not employee or not date_from:
             return True
 
-        OvertimeEntry = self.env[
-            "hr.overtime.entry"
-        ]
+        OvertimeEntry = self.env["hr.overtime.entry"]
 
         automatic_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
@@ -716,6 +714,7 @@ class HrAttendance(models.Model):
                     self.AUTO_REF_OLD,
                     self.AUTO_REF_DAY,
                     self.AUTO_REF_WEEK,
+                    "Migración automática desde Asistencias",
                 ],
             ),
         ])
