@@ -391,8 +391,6 @@ class HrAttendance(models.Model):
                 local_day,
             )
 
-        # Diario:
-        # mantenemos el cálculo histórico de Attendance.
         return self._sync_historical_overtime_for_employee_day(
             employee.id,
             local_day,
@@ -551,6 +549,77 @@ class HrAttendance(models.Model):
             ),
             ("check_out", "!=", False),
         ])
+
+        overtime_total = sum(
+            self._get_attendance_overtime_value(att)
+            for att in attendances
+        )
+
+        overtime_total = round(
+            overtime_total,
+            4,
+        )
+
+        existing_entries = OvertimeEntry.search([
+            ("employee_id", "=", employee.id),
+            ("date", "=", day),
+            ("reference", "=", self.AUTO_REF_DAY),
+        ], order="id asc")
+
+        main_entry = existing_entries[:1]
+        duplicates = existing_entries[1:]
+
+        if duplicates:
+            duplicates.unlink()
+
+        if abs(overtime_total) < 0.01:
+            if main_entry:
+                main_entry.unlink()
+
+            return
+
+        worked_hours = sum(
+            attendances.mapped("worked_hours")
+        )
+
+        expected_hours = (
+            worked_hours - overtime_total
+        )
+
+        if overtime_total > 0:
+            entry_type = "extra"
+            entry_hours = overtime_total
+        else:
+            entry_type = "early_exit"
+            entry_hours = abs(overtime_total)
+
+        values = {
+            "employee_id": employee.id,
+            "date": day,
+            "hours": entry_hours,
+            "type": entry_type,
+            "state": "done",
+            "reference": self.AUTO_REF_DAY,
+            "expected_hours": expected_hours,
+            "worked_hours": worked_hours,
+            "description": (
+                "Movimiento diario reconstruido desde Asistencias"
+            ),
+        }
+
+        context_values = {
+            "skip_overtime_limit": True,
+            "skip_comp_sync": True,
+        }
+
+        if main_entry:
+            main_entry.with_context(
+                **context_values
+            ).write(values)
+        else:
+            OvertimeEntry.with_context(
+                **context_values
+            ).create(values)
 
         overtime_total = sum(
             self._get_attendance_overtime_value(att)
