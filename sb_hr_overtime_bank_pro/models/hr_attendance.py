@@ -852,7 +852,6 @@ class HrAttendance(models.Model):
         employee_id,
         local_day,
     ):
-
         OvertimeEntry = self.env["hr.overtime.entry"]
 
         employee = self.env["hr.employee"].browse(
@@ -862,8 +861,27 @@ class HrAttendance(models.Model):
         if not employee or not local_day:
             return
 
-        week_start, week_end = self._get_week_range(local_day)
+        week_start, week_end = self._get_week_range(
+            local_day
+        )
+
         today = fields.Date.context_today(self)
+
+        mode_at_week_start = employee._get_overtime_mode_for_date(
+            week_start
+        )
+
+        if mode_at_week_start != "weekly":
+            return
+
+        # También comprobamos el final de semana.
+        # Esto evita semanas mixtas por configuraciones incorrectas.
+        mode_at_week_end = employee._get_overtime_mode_for_date(
+            week_end
+        )
+
+        if mode_at_week_end != "weekly":
+            return
 
         weekly_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
@@ -875,15 +893,27 @@ class HrAttendance(models.Model):
         duplicate_entries = weekly_entries[1:]
 
         if duplicate_entries:
-            duplicate_entries.unlink()
+            duplicate_entries.with_context(
+                skip_overtime_limit=True,
+                skip_comp_sync=True,
+            ).unlink()
 
-        # No consolidamos la semana que todavía está en curso.
+        automatic_daily_references = [
+            self.AUTO_REF_OLD,
+            self.AUTO_REF_DAY,
+            "Migración automática desde Asistencias",
+        ]
+        
         if week_end >= today:
-            if weekly_entry:
-                weekly_entry.unlink()
 
-            # También eliminamos posibles movimientos diarios,
-            # ya que el empleado trabaja en modo semanal.
+            if weekly_entry:
+                weekly_entry.with_context(
+                    skip_overtime_limit=True,
+                    skip_comp_sync=True,
+                ).unlink()
+
+            # Si esta semana pertenece completamente al modo weekly,
+            # no deben existir movimientos diarios automáticos.
             current_daily_entries = OvertimeEntry.search([
                 ("employee_id", "=", employee.id),
                 ("date", ">=", week_start),
@@ -891,17 +921,18 @@ class HrAttendance(models.Model):
                 (
                     "reference",
                     "in",
-                    [
-                        self.AUTO_REF_OLD,
-                        self.AUTO_REF_DAY,
-                    ],
+                    automatic_daily_references,
                 ),
             ])
 
             if current_daily_entries:
-                current_daily_entries.unlink()
+                current_daily_entries.with_context(
+                    skip_overtime_limit=True,
+                    skip_comp_sync=True,
+                ).unlink()
 
             return
+
 
         daily_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
@@ -910,15 +941,15 @@ class HrAttendance(models.Model):
             (
                 "reference",
                 "in",
-                [
-                    self.AUTO_REF_OLD,
-                    self.AUTO_REF_DAY,
-                ],
+                automatic_daily_references,
             ),
         ])
 
         if daily_entries:
-            daily_entries.unlink()
+            daily_entries.with_context(
+                skip_overtime_limit=True,
+                skip_comp_sync=True,
+            ).unlink()
 
         expected_hours = self._get_expected_hours_for_week(
             employee,
@@ -937,15 +968,21 @@ class HrAttendance(models.Model):
             4,
         )
 
+
         if abs(difference) < 0.01:
+
             if weekly_entry:
-                weekly_entry.unlink()
+                weekly_entry.with_context(
+                    skip_overtime_limit=True,
+                    skip_comp_sync=True,
+                ).unlink()
 
             return
 
         if difference > 0:
             entry_type = "extra"
             entry_hours = difference
+
         else:
             entry_type = "early_exit"
             entry_hours = abs(difference)
@@ -960,10 +997,15 @@ class HrAttendance(models.Model):
             "expected_hours": expected_hours,
             "worked_hours": worked_hours,
             "description": (
-                f"Resumen semanal ({week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')})\n"
-                f"Horas trabajadas: {self._format_hours(worked_hours)}\n"
-                f"Horas previstas: {self._format_hours(expected_hours)}\n"
-                f"Diferencia: {self._format_hours(difference)}"
+                f"Resumen semanal "
+                f"({week_start.strftime('%d/%m/%Y')} - "
+                f"{week_end.strftime('%d/%m/%Y')})\n"
+                f"Horas trabajadas: "
+                f"{self._format_hours(worked_hours)}\n"
+                f"Horas previstas: "
+                f"{self._format_hours(expected_hours)}\n"
+                f"Diferencia: "
+                f"{self._format_hours(difference)}"
             ),
         }
 
@@ -972,10 +1014,12 @@ class HrAttendance(models.Model):
             "skip_comp_sync": True,
         }
 
+
         if weekly_entry:
             weekly_entry.with_context(
                 **context_values
             ).write(values)
+
         else:
             OvertimeEntry.with_context(
                 **context_values
