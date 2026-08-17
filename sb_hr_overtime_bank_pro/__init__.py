@@ -27,7 +27,7 @@ def migrate_overtime_from_attendance(env):
         if overtime_hours == 0:
             continue
 
-        entry_type = 'extra' if overtime_hours > 0 else 'compensation'
+        entry_type = 'extra' if overtime_hours > 0 else 'early_exit'
         hours = abs(overtime_hours)
 
         existing = Overtime.search([

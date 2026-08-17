@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from odoo import models, fields, api
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -63,14 +63,6 @@ class HrEmployee(models.Model):
     overtime_change_date = fields.Date(
         string="Aplicar desde",
     )
-    
-    overtime_new_weekly_hours = fields.Float(
-        string="Horas semanales previstas",
-        store=False,
-        help=(
-            "Horas semanales que se congelarán para el nuevo periodo flexible."
-        ),
-    )
 
     @api.depends("overtime_entry_ids.hours", "overtime_entry_ids.type", "overtime_entry_ids.state")
     def _compute_overtime_balance(self):
@@ -130,16 +122,8 @@ class HrEmployee(models.Model):
             raise UserError(
                 "Debes indicar desde qué fecha se aplicará el cambio."
             )
-            
-        if (
-            new_mode == "weekly"
-            and not self.overtime_new_weekly_hours
-        ):
-            raise UserError(
-                "Debes indicar las horas semanales previstas "
-                "para el periodo flexible."
-            )
 
+        # IMPORTANTE: primero asignamos estas variables
         new_mode = self.overtime_new_mode
         change_date = self.overtime_change_date
 
@@ -151,8 +135,6 @@ class HrEmployee(models.Model):
             previous_day
         )
 
-        # Si ya tenía esa misma modalidad, NO hacemos rebuild
-        # ni creamos un periodo innecesario.
         if previous_mode == new_mode:
             raise UserError(
                 "El empleado ya tenía esta modalidad antes de "
@@ -166,7 +148,6 @@ class HrEmployee(models.Model):
         ], order="date_from desc, id desc", limit=1)
 
         if last_period and not last_period.date_to:
-            # Evitamos cerrar un periodo con una fecha inválida
             if change_date <= last_period.date_from:
                 raise UserError(
                     "La fecha del nuevo cambio debe ser posterior "
@@ -176,6 +157,23 @@ class HrEmployee(models.Model):
             last_period.write({
                 "date_to": change_date - timedelta(days=1),
             })
+            
+        weekly_expected_hours = 0.0
+
+        if new_mode == "weekly":
+
+            if not self.resource_calendar_id:
+                raise UserError(
+                    "El empleado no tiene un horario de trabajo configurado."
+                )
+
+            weekly_expected_hours = self._get_calendar_weekly_hours()
+
+            if weekly_expected_hours <= 0:
+                raise UserError(
+                    "El horario de trabajo del empleado no tiene "
+                    "horas semanales configuradas."
+                )
 
         Period.create({
             "employee_id": self.id,
@@ -183,7 +181,7 @@ class HrEmployee(models.Model):
             "date_to": False,
             "calculation_mode": new_mode,
             "weekly_expected_hours": (
-                self.overtime_new_weekly_hours
+                weekly_expected_hours
                 if new_mode == "weekly"
                 else 0.0
             ),
@@ -191,12 +189,13 @@ class HrEmployee(models.Model):
 
         self.overtime_new_mode = False
         self.overtime_change_date = False
-        self.overtime_new_weekly_hours = False
 
         today = fields.Date.context_today(self)
 
         if change_date <= today:
-            self.env["hr.attendance"]._rebuild_employee_overtime_from_date(
+            self.env[
+                "hr.attendance"
+            ]._rebuild_employee_overtime_from_date(
                 self,
                 change_date,
             )
@@ -214,6 +213,35 @@ class HrEmployee(models.Model):
                 "sticky": False,
             },
         }
+        
+    def _get_calendar_weekly_hours(self):
+        self.ensure_one()
+
+        calendar = self.resource_calendar_id
+
+        if not calendar:
+            return 0.0
+
+        weekly_hours = 0.0
+
+        attendances = calendar.attendance_ids
+
+        for attendance in attendances:
+            hour_from = attendance.hour_from or 0.0
+            hour_to = attendance.hour_to or 0.0
+
+            if hour_to > hour_from:
+                weekly_hours += hour_to - hour_from
+
+        # Calendarios alternos de 2 semanas:
+        # attendance_ids contiene ambas semanas.
+        if (
+            "two_weeks_calendar" in calendar._fields
+            and calendar.two_weeks_calendar
+        ):
+            weekly_hours /= 2.0
+
+        return round(weekly_hours, 4)
 
     def action_rebuild_overtime_history(self):
         for employee in self:

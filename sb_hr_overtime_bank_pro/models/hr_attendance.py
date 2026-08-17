@@ -548,11 +548,11 @@ class HrAttendance(models.Model):
                 fields.Datetime.to_string(end_dt),
             ),
             ("check_out", "!=", False),
-        ])
+        ], order="check_in asc")
 
         overtime_total = sum(
-            self._get_attendance_overtime_value(att)
-            for att in attendances
+            self._get_attendance_overtime_value(attendance)
+            for attendance in attendances
         )
 
         overtime_total = round(
@@ -560,21 +560,38 @@ class HrAttendance(models.Model):
             4,
         )
 
+        automatic_references = [
+            self.AUTO_REF_OLD,
+            self.AUTO_REF_DAY,
+            "Migración automática desde Asistencias",
+        ]
+
         existing_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
             ("date", "=", day),
-            ("reference", "=", self.AUTO_REF_DAY),
+            (
+                "reference",
+                "in",
+                automatic_references,
+            ),
         ], order="id asc")
 
         main_entry = existing_entries[:1]
-        duplicates = existing_entries[1:]
+        duplicate_entries = existing_entries[1:]
 
-        if duplicates:
-            duplicates.unlink()
+        if duplicate_entries:
+            duplicate_entries.with_context(
+                skip_overtime_limit=True,
+                skip_comp_sync=True,
+            ).unlink()
 
         if abs(overtime_total) < 0.01:
+
             if main_entry:
-                main_entry.unlink()
+                main_entry.with_context(
+                    skip_overtime_limit=True,
+                    skip_comp_sync=True,
+                ).unlink()
 
             return
 
@@ -582,13 +599,20 @@ class HrAttendance(models.Model):
             attendances.mapped("worked_hours")
         )
 
-        expected_hours = (
-            worked_hours - overtime_total
+        worked_hours = round(
+            worked_hours,
+            4,
+        )
+
+        expected_hours = round(
+            worked_hours - overtime_total,
+            4,
         )
 
         if overtime_total > 0:
             entry_type = "extra"
             entry_hours = overtime_total
+
         else:
             entry_type = "early_exit"
             entry_hours = abs(overtime_total)
@@ -603,7 +627,13 @@ class HrAttendance(models.Model):
             "expected_hours": expected_hours,
             "worked_hours": worked_hours,
             "description": (
-                "Movimiento diario reconstruido desde Asistencias"
+                "Movimiento diario automático.\n"
+                f"Horas trabajadas: "
+                f"{self._format_hours(worked_hours)}\n"
+                f"Horas previstas: "
+                f"{self._format_hours(expected_hours)}\n"
+                f"Diferencia: "
+                f"{self._format_hours(overtime_total)}"
             ),
         }
 
@@ -616,78 +646,7 @@ class HrAttendance(models.Model):
             main_entry.with_context(
                 **context_values
             ).write(values)
-        else:
-            OvertimeEntry.with_context(
-                **context_values
-            ).create(values)
 
-        overtime_total = sum(
-            self._get_attendance_overtime_value(att)
-            for att in attendances
-        )
-
-        overtime_total = round(
-            overtime_total,
-            4,
-        )
-
-        existing_entries = OvertimeEntry.search([
-            ("employee_id", "=", employee.id),
-            ("date", "=", day),
-            ("reference", "=", self.AUTO_REF_DAY),
-        ], order="id asc")
-
-        main_entry = existing_entries[:1]
-        duplicates = existing_entries[1:]
-
-        if duplicates:
-            duplicates.unlink()
-
-        if abs(overtime_total) < 0.01:
-            if main_entry:
-                main_entry.unlink()
-
-            return
-
-        worked_hours = sum(
-            attendances.mapped("worked_hours")
-        )
-
-        expected_hours = (
-            worked_hours - overtime_total
-        )
-
-        if overtime_total > 0:
-            entry_type = "extra"
-            entry_hours = overtime_total
-        else:
-            entry_type = "early_exit"
-            entry_hours = abs(overtime_total)
-
-        values = {
-            "employee_id": employee.id,
-            "date": day,
-            "hours": entry_hours,
-            "type": entry_type,
-            "state": "done",
-            "reference": self.AUTO_REF_DAY,
-            "expected_hours": expected_hours,
-            "worked_hours": worked_hours,
-            "description": (
-                "Movimiento histórico reconstruido "
-                "desde Asistencias"
-            ),
-        }
-
-        context_values = {
-            "skip_overtime_limit": True,
-            "skip_comp_sync": True,
-        }
-
-        if main_entry:
-            main_entry.with_context(
-                **context_values
-            ).write(values)
         else:
             OvertimeEntry.with_context(
                 **context_values
@@ -765,11 +724,6 @@ class HrAttendance(models.Model):
         week_start,
         week_end,
     ):
-        """
-        Obtiene las horas semanales congeladas en el periodo
-        histórico correspondiente.
-        """
-
         period = self.env[
             "hr.employee.overtime.period"
         ].search([
@@ -787,9 +741,6 @@ class HrAttendance(models.Model):
                 4,
             )
 
-        # Fallback de seguridad:
-        # si no existe periodo correctamente configurado,
-        # no inventamos horas.
         return 0.0
 
     def _get_worked_hours_for_week(
