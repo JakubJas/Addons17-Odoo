@@ -62,6 +62,15 @@
 
                     </group>
 
+                    <group string="Configuración de vacaciones">
+
+                        <field name="vacation_weekday_ids"
+                            string="Días que descuentan vacaciones"
+                            widget="many2many_tags"
+                            options="{'no_create': True, 'no_create_edit': True, 'no_open': True}"/>
+
+                    </group>
+
                     <separator string="HISTORIAL DE MODALIDADES"/>
 
                     <field name="overtime_period_ids"

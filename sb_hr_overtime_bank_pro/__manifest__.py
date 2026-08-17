@@ -24,6 +24,7 @@
         "views/hr_attendance_inherit.xml",
         "views/overtime_menu.xml",
         "data/cron_alerts.xml",
+        'data/vacation_weekday_data.xml',
     ],
     'post_init_hook': 'migrate_overtime_from_attendance',
     "installable": True,

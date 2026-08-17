@@ -1,0 +1,45 @@
+<odoo noupdate="1">
+
+    <record id="vacation_weekday_monday" model="hr.vacation.weekday">
+        <field name="name">Lunes</field>
+        <field name="code">0</field>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="vacation_weekday_tuesday" model="hr.vacation.weekday">
+        <field name="name">Martes</field>
+        <field name="code">1</field>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="vacation_weekday_wednesday" model="hr.vacation.weekday">
+        <field name="name">Miércoles</field>
+        <field name="code">2</field>
+        <field name="sequence">30</field>
+    </record>
+
+    <record id="vacation_weekday_thursday" model="hr.vacation.weekday">
+        <field name="name">Jueves</field>
+        <field name="code">3</field>
+        <field name="sequence">40</field>
+    </record>
+
+    <record id="vacation_weekday_friday" model="hr.vacation.weekday">
+        <field name="name">Viernes</field>
+        <field name="code">4</field>
+        <field name="sequence">50</field>
+    </record>
+
+    <record id="vacation_weekday_saturday" model="hr.vacation.weekday">
+        <field name="name">Sábado</field>
+        <field name="code">5</field>
+        <field name="sequence">60</field>
+    </record>
+
+    <record id="vacation_weekday_sunday" model="hr.vacation.weekday">
+        <field name="name">Domingo</field>
+        <field name="code">6</field>
+        <field name="sequence">70</field>
+    </record>
+
+</odoo>

@@ -7,6 +7,20 @@ from odoo.exceptions import UserError
 class HrEmployee(models.Model):
     _inherit = "hr.employee"
 
+    vacation_weekday_ids = fields.Many2many(
+        comodel_name="hr.vacation.weekday",
+        relation="hr_employee_vacation_weekday_rel",
+        column1="employee_id",
+        column2="weekday_id",
+        string="Días que descuentan vacaciones",
+        help=(
+            "Días de la semana que deben descontarse del saldo "
+            "de vacaciones para este empleado. "
+            "Si no se selecciona ningún día, se utilizará "
+            "el comportamiento estándar de Odoo."
+        ),
+    )
+
     overtime_entry_ids = fields.One2many(
         "hr.overtime.entry",
         "employee_id",
