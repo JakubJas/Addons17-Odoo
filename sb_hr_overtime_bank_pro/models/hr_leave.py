@@ -2,7 +2,6 @@ from datetime import timedelta
 
 from odoo import models
 
-
 class HrLeave(models.Model):
     _inherit = "hr.leave"
 
@@ -26,22 +25,44 @@ class HrLeave(models.Model):
         if not config:
             return False
 
+        if not config.leave_type_ids:
+            return False
+
         if self.holiday_status_id not in config.leave_type_ids:
+            return False
+
+        if (
+            "request_unit" in self.holiday_status_id._fields
+            and self.holiday_status_id.request_unit == "hour"
+        ):
             return False
 
         return True
 
     def _get_custom_vacation_days(self):
+
         self.ensure_one()
 
-        if not self.request_date_from or not self.request_date_to:
+        if not self.request_date_from:
             return 0.0
 
-        weekday_codes = {
-            int(code)
-            for code in self.employee_id.vacation_weekday_ids.mapped("code")
-            if code is not False
-        }
+        if not self.request_date_to:
+            return 0.0
+
+        weekday_codes = set()
+
+        for weekday in self.employee_id.vacation_weekday_ids:
+
+            if weekday.code is False:
+                continue
+
+            try:
+                weekday_codes.add(
+                    int(weekday.code)
+                )
+
+            except (TypeError, ValueError):
+                continue
 
         if not weekday_codes:
             return 0.0
@@ -49,15 +70,16 @@ class HrLeave(models.Model):
         current_date = self.request_date_from
         end_date = self.request_date_to
 
-        total_days = 0
+        total_days = 0.0
 
         while current_date <= end_date:
+
             if current_date.weekday() in weekday_codes:
-                total_days += 1
+                total_days += 1.0
 
             current_date += timedelta(days=1)
 
-        return float(total_days)
+        return total_days
 
     def _get_duration(
         self,
