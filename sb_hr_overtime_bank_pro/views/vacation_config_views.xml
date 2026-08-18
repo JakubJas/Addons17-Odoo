@@ -1,0 +1,53 @@
+<odoo>
+
+    <record id="view_hr_vacation_config_form" model="ir.ui.view">
+        <field name="name">hr.vacation.config.form</field>
+        <field name="model">hr.vacation.config</field>
+        <field name="arch" type="xml">
+
+            <form string="Configuración de vacaciones">
+
+                <sheet>
+
+                    <group>
+
+                        <field name="name"
+                               readonly="1"/>
+
+                        <field name="leave_type_ids"
+                               string="Tipos de ausencia afectados"
+                               widget="many2many_tags"
+                               options="{'no_create': True, 'no_create_edit': True}"/>
+
+                    </group>
+
+                </sheet>
+
+            </form>
+
+        </field>
+    </record>
+
+
+    <record id="action_hr_vacation_config"
+            model="ir.actions.act_window">
+
+        <field name="name">Configuración vacaciones</field>
+        <field name="res_model">hr.vacation.config</field>
+        <field name="view_mode">form</field>
+
+        <field name="res_id"
+               ref="sb_hr_overtime_bank_pro.vacation_config_default"/>
+
+        <field name="target">current</field>
+
+    </record>
+
+
+    <menuitem id="menu_hr_vacation_config"
+              name="Configuración vacaciones"
+              parent="menu_overtime_root"
+              action="action_hr_vacation_config"
+              sequence="30"/>
+
+</odoo>

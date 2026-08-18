@@ -11,3 +11,4 @@ access_overtime_payment_hr,hr.overtime.payment.hr,model_hr_overtime_payment,sb_h
 access_overtime_payment_admin,hr.overtime.payment.admin,model_hr_overtime_payment,sb_hr_overtime_bank_pro.group_overtime_admin,1,1,1,1
 access_hr_vacation_weekday_hr,hr.vacation.weekday.hr,model_hr_vacation_weekday,sb_hr_overtime_bank_pro.group_overtime_hr,1,0,0,0
 access_hr_vacation_weekday_admin,hr.vacation.weekday.admin,model_hr_vacation_weekday,sb_hr_overtime_bank_pro.group_overtime_admin,1,0,0,0
+access_hr_vacation_leave_type_admin,hr.vacation.leave.type.admin,model_hr_vacation_leave_type,sb_hr_overtime_bank_pro.group_overtime_admin,1,1,1,1

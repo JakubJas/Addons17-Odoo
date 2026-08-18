@@ -1,0 +1,7 @@
+<odoo noupdate="1">
+
+    <record id="vacation_config_default" model="hr.vacation.config">
+        <field name="name">Configuración vacaciones</field>
+    </record>
+
+</odoo>

@@ -6,3 +6,6 @@ from . import mail_activity
 from . import mail_activity_mixin
 from . import overtime_period
 from . import vacation_weekday
+from . import hr_leave
+from . import vacation_leave_type
+from . import vacation_config
