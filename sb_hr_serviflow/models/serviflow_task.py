@@ -1,6 +1,7 @@
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 
+from odoo import api
 
 class ServiflowTask(models.Model):
     _name = "serviflow.task"
@@ -90,10 +91,14 @@ class ServiflowTask(models.Model):
         for task in self:
 
             if task.task_type != "budget":
-                raise UserError("Solo se pueden aceptar solicitudes de presupuesto técnico.")
+                raise UserError(
+                    "Solo se pueden aceptar solicitudes de presupuesto técnico."
+                )
 
             if task.state != "pending":
-                raise UserError("Esta solicitud ya no está pendiente.")
+                raise UserError(
+                    "Esta solicitud ya ha sido aceptada por otro usuario."
+                )
 
             task.write({
                 "state": "accepted",
@@ -104,12 +109,15 @@ class ServiflowTask(models.Model):
             task.opportunity_id.write({
                 "user_id": self.env.user.id,
             })
-            
+
+            # Borra/cierra los avisos de todos los técnicos
             task._close_user_activities()
 
             task.message_post(
                 body=f"Solicitud aceptada por {self.env.user.name}"
             )
+
+        return True
 
     def action_done(self):
         for task in self:
@@ -402,7 +410,7 @@ class ServiflowTask(models.Model):
                 "res_id": task.id,
                 "user_id": task.assigned_user_id.id,
                 "activity_type_id": activity_type.id,
-                "summary": task.name,
+                "summary": task._get_activity_summary(),
                 "note": task.note or "",
                 "date_deadline": fields.Date.today(),
             })
@@ -440,11 +448,10 @@ class ServiflowTask(models.Model):
                     "res_id": task.id,
                     "user_id": user.id,
                     "activity_type_id": activity_type.id,
-                    "summary": task.name,
+                    "summary": task._get_activity_summary(),
                     "note": task.note or "",
                     "date_deadline": fields.Date.today(),
                 })
-
 
     def _close_user_activities(self):
         for task in self:
@@ -455,3 +462,43 @@ class ServiflowTask(models.Model):
 
             if activities:
                 activities.action_feedback(feedback="Gestionado desde Serviflow")
+                
+    def _get_activity_summary(self):
+        self.ensure_one()
+
+        if self.task_type == "budget" and self.state == "pending":
+            return f"PPTO técnico: {self.opportunity_id.name}"
+
+        if self.task_type == "budget" and self.state == "accepted":
+            return f"Corrección/Trabajo PPTO: {self.opportunity_id.name}"
+
+        if self.task_type == "review":
+            return f"Revisión presupuesto: {self.opportunity_id.name}"
+
+        return self.name
+    
+    @api.model
+    def get_my_pending_systray_tasks(self):
+        """
+        Devuelve únicamente solicitudes Serviflow pendientes
+        que tengan una actividad asignada al usuario actual.
+        """
+
+        activities = self.env["mail.activity"].sudo().search([
+            ("res_model", "=", "serviflow.task"),
+            ("user_id", "=", self.env.user.id),
+        ])
+
+        task_ids = activities.mapped("res_id")
+
+        tasks = self.search([
+            ("id", "in", task_ids),
+            ("task_type", "=", "budget"),
+            ("state", "=", "pending"),
+        ])
+
+        return [{
+            "id": task.id,
+            "name": task.name,
+            "opportunity": task.opportunity_id.name or "",
+        } for task in tasks]

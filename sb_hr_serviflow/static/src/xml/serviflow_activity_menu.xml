@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-inherit="mail.ActivityMenu"
+       t-inherit-mode="extension">
+
+        <xpath expr="//div[@name='activityGroups']"
+               position="before">
+
+            <div t-if="serviflow.tasks.length"
+                 class="border-bottom pb-2 mb-2">
+
+                <div class="px-3 py-2 fw-bold">
+                    Solicitudes Serviflow
+                </div>
+
+                <t t-foreach="serviflow.tasks"
+                   t-as="task"
+                   t-key="task.id">
+
+                    <div class="d-flex align-items-center px-3 py-2">
+
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="fw-semibold text-truncate">
+                                <t t-esc="task.name"/>
+                            </div>
+
+                            <small class="text-muted text-truncate">
+                                <t t-esc="task.opportunity"/>
+                            </small>
+                        </div>
+
+                        <button type="button"
+                                class="btn btn-primary btn-sm ms-2"
+                                t-on-click.stop="() => this.acceptServiflowTask(task.id)">
+                            Aceptar
+                        </button>
+
+                    </div>
+
+                </t>
+
+            </div>
+
+        </xpath>
+
+    </t>
+
+</templates>

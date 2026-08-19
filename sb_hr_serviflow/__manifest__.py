@@ -17,6 +17,12 @@
         "views/serviflow_reviewer_config_views.xml",
         "views/serviflow_task_views.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "sb_hr_serviflow/static/src/js/serviflow_activity_menu.js",
+            "sb_hr_serviflow/static/src/xml/serviflow_activity_menu.xml",
+        ],
+    },
     'installable': True,
     'application': True,
 }
