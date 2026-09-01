@@ -502,3 +502,19 @@ class ServiflowTask(models.Model):
             "name": task.name,
             "opportunity": task.opportunity_id.name or "",
         } for task in tasks]
+        
+    @api.model
+    def get_my_pending_systray_reviews(self):
+        tasks = self.search([
+            ("task_type", "=", "review"),
+            ("assigned_user_id", "=", self.env.user.id),
+            ("review_result", "=", "pending"),
+            ("state", "=", "pending"),
+        ])
+
+        return [{
+            "id": task.id,
+            "name": task.name,
+            "opportunity": task.opportunity_id.name or "",
+            "round": task.review_round,
+        } for task in tasks]

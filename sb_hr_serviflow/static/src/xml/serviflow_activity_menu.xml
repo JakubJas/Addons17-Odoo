@@ -42,6 +42,53 @@
 
             </div>
 
+            <div t-if="serviflow.reviews.length"
+                class="border-bottom pb-2 mb-2">
+
+                <div class="px-3 py-2 fw-bold">
+                    Revisiones Serviflow
+                </div>
+
+                <t t-foreach="serviflow.reviews"
+                t-as="review"
+                t-key="review.id">
+
+                    <div class="px-3 py-2">
+
+                        <div class="mb-2">
+                            <div class="fw-semibold">
+                                <t t-esc="review.name"/>
+                            </div>
+
+                            <small class="text-muted">
+                                <t t-esc="review.opportunity"/>
+                                · Ronda
+                                <t t-esc="review.round"/>
+                            </small>
+                        </div>
+
+                        <div class="d-flex gap-2">
+
+                            <button type="button"
+                                    class="btn btn-success btn-sm"
+                                    t-on-click.stop="() => this.approveServiflowReview(review.id)">
+                                Aprobar
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-danger btn-sm"
+                                    t-on-click.stop="() => this.rejectServiflowReview(review.id)">
+                                Rechazar
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </t>
+
+            </div>
+
         </xpath>
 
     </t>

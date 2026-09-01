@@ -14,12 +14,24 @@ patch(ActivityMenu.prototype, {
 
         this.serviflow = useState({
             tasks: [],
+            reviews: [],
         });
     },
 
     async onBeforeOpen() {
         await super.onBeforeOpen();
+
         await this.loadServiflowTasks();
+        await this.loadServiflowReviews();
+    },
+
+    async loadServiflowReviews() {
+        this.serviflow.reviews = await this.orm.call(
+            "serviflow.task",
+            "get_my_pending_systray_reviews",
+            [],
+            {}
+        );
     },
 
     async loadServiflowTasks() {
@@ -29,6 +41,64 @@ patch(ActivityMenu.prototype, {
             [],
             {}
         );
+    },
+
+    async approveServiflowReview(taskId) {
+        try {
+            await this.orm.call(
+                "serviflow.task",
+                "action_review_approve",
+                [[taskId]],
+                {}
+            );
+
+            this.notification.add(
+                "Revisión aprobada correctamente.",
+                {
+                    type: "success",
+                }
+            );
+
+            await this.loadServiflowReviews();
+            await this.fetchSystrayActivities();
+
+        } catch (error) {
+            this.notification.add(
+                "No se ha podido aprobar la revisión.",
+                {
+                    type: "warning",
+                }
+            );
+        }
+    },
+
+    async rejectServiflowReview(taskId) {
+        try {
+            await this.orm.call(
+                "serviflow.task",
+                "action_review_reject",
+                [[taskId]],
+                {}
+            );
+
+            this.notification.add(
+                "Revisión rechazada.",
+                {
+                    type: "warning",
+                }
+            );
+
+            await this.loadServiflowReviews();
+            await this.fetchSystrayActivities();
+
+        } catch (error) {
+            this.notification.add(
+                "No se ha podido rechazar la revisión.",
+                {
+                    type: "warning",
+                }
+            );
+        }
     },
 
     async acceptServiflowTask(taskId) {
