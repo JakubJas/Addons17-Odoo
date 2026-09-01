@@ -1,7 +1,5 @@
-from odoo import models, fields, _
+from odoo import api, models, fields, _
 from odoo.exceptions import UserError
-
-from odoo import api
 
 class ServiflowTask(models.Model):
     _name = "serviflow.task"
@@ -479,10 +477,6 @@ class ServiflowTask(models.Model):
     
     @api.model
     def get_my_pending_systray_tasks(self):
-        """
-        Devuelve únicamente solicitudes Serviflow pendientes
-        que tengan una actividad asignada al usuario actual.
-        """
 
         activities = self.env["mail.activity"].sudo().search([
             ("res_model", "=", "serviflow.task"),
@@ -505,7 +499,16 @@ class ServiflowTask(models.Model):
         
     @api.model
     def get_my_pending_systray_reviews(self):
-        tasks = self.search([
+
+        activities = self.env["mail.activity"].sudo().search([
+            ("res_model", "=", "serviflow.task"),
+            ("user_id", "=", self.env.user.id),
+        ])
+
+        task_ids = activities.mapped("res_id")
+
+        reviews = self.sudo().search([
+            ("id", "in", task_ids),
             ("task_type", "=", "review"),
             ("assigned_user_id", "=", self.env.user.id),
             ("review_result", "=", "pending"),
@@ -513,8 +516,8 @@ class ServiflowTask(models.Model):
         ])
 
         return [{
-            "id": task.id,
-            "name": task.name,
-            "opportunity": task.opportunity_id.name or "",
-            "round": task.review_round,
-        } for task in tasks]
+            "id": review.id,
+            "name": review.name,
+            "opportunity": review.opportunity_id.name or "",
+            "round": review.review_round,
+        } for review in reviews]

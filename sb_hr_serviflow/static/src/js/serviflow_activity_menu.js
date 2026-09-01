@@ -72,35 +72,6 @@ patch(ActivityMenu.prototype, {
         }
     },
 
-    async rejectServiflowReview(taskId) {
-        try {
-            await this.orm.call(
-                "serviflow.task",
-                "action_review_reject",
-                [[taskId]],
-                {}
-            );
-
-            this.notification.add(
-                "Revisión rechazada.",
-                {
-                    type: "warning",
-                }
-            );
-
-            await this.loadServiflowReviews();
-            await this.fetchSystrayActivities();
-
-        } catch (error) {
-            this.notification.add(
-                "No se ha podido rechazar la revisión.",
-                {
-                    type: "warning",
-                }
-            );
-        }
-    },
-
     async acceptServiflowTask(taskId) {
         try {
             await this.orm.call(

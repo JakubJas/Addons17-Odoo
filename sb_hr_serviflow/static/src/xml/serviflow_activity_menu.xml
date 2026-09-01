@@ -75,12 +75,6 @@
                                 Aprobar
                             </button>
 
-                            <button type="button"
-                                    class="btn btn-danger btn-sm"
-                                    t-on-click.stop="() => this.rejectServiflowReview(review.id)">
-                                Rechazar
-                            </button>
-
                         </div>
 
                     </div>
