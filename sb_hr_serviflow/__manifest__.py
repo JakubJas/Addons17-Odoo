@@ -1,6 +1,6 @@
 {
     'name': 'Serviflow',
-    'version': '17.0.1.0.0',
+    'version': '17.0.1.0.2',
     'summary': 'Flujo de trabajo entre departamentos/modulos',
     'description': """
         Este módulo permite gestionar:
@@ -10,7 +10,7 @@
     'website': 'https://www.servibyte.com',
     'category': 'Tools',
     'license': 'LGPL-3',
-    'depends': ['base','crm','mail'],
+    'depends': ['base','crm','mail', 'sale', 'sale_crm'],
     'data': [
         "security/security.xml",
         "security/ir.model.access.csv",

@@ -84,6 +84,13 @@ class ServiflowTask(models.Model):
         default=1,
         tracking=True,
     )
+    
+    sale_order_id = fields.Many2one(
+        "sale.order",
+        string="Presupuesto",
+        tracking=True,
+        domain="[('opportunity_id', '=', opportunity_id)]",
+    )
 
     def action_accept(self):
         for task in self:
@@ -521,3 +528,36 @@ class ServiflowTask(models.Model):
             "opportunity": review.opportunity_id.name or "",
             "round": review.review_round,
         } for review in reviews]
+        
+    def action_create_quotation(self):
+        self.ensure_one()
+
+        if self.task_type != "budget":
+            raise UserError("Solo se puede crear un presupuesto desde una solicitud técnica.")
+
+        if self.sale_order_id:
+            return {
+                "type": "ir.actions.act_window",
+                "res_model": "sale.order",
+                "res_id": self.sale_order_id.id,
+                "view_mode": "form",
+                "target": "current",
+            }
+
+        lead = self.opportunity_id
+
+        quotation = self.env["sale.order"].create({
+            "partner_id": lead.partner_id.id if lead.partner_id else False,
+            "opportunity_id": lead.id,
+            "origin": lead.name,
+        })
+
+        self.sale_order_id = quotation.id
+
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "sale.order",
+            "res_id": quotation.id,
+            "view_mode": "form",
+            "target": "current",
+        }
