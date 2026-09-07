@@ -1,0 +1,88 @@
+from odoo import models, fields, _
+from odoo.exceptions import UserError
+
+
+class ServiflowRequestBudgetWizard(models.TransientModel):
+    _name = "serviflow.request.budget.wizard"
+    _description = "Solicitar Presupuesto Técnico"
+
+    opportunity_id = fields.Many2one(
+        "crm.lead",
+        string="Oportunidad",
+        required=True,
+        readonly=True,
+    )
+
+    technical_notes = fields.Text(
+        string="Indicaciones para Oficina Técnica",
+        required=True,
+    )
+
+    priority = fields.Selection(
+        [
+            ("0", "Normal"),
+            ("1", "Baja"),
+            ("2", "Alta"),
+            ("3", "Muy alta"),
+        ],
+        string="Prioridad",
+        default="0",
+        required=True,
+    )
+
+    requested_date = fields.Date(
+        string="Fecha deseada",
+    )
+
+    def action_confirm(self):
+        self.ensure_one()
+
+        if not self.technical_notes or not self.technical_notes.strip():
+            raise UserError(
+                _("Debes indicar las instrucciones para Oficina Técnica.")
+            )
+
+        lead = self.opportunity_id
+
+        stage = self.env["crm.stage"].search([
+            ("name", "=", "Solicitado Presupuesto Técnico")
+        ], limit=1)
+
+        if not stage:
+            raise UserError(
+                _("No se encontró la etapa 'Solicitado Presupuesto Técnico'.")
+            )
+
+        # Cambiar etapa
+        lead.write({
+            "stage_id": stage.id,
+        })
+
+        # Buscar si ya existe una solicitud activa
+        existing = self.env["serviflow.task"].search([
+            ("opportunity_id", "=", lead.id),
+            ("task_type", "=", "budget"),
+            ("state", "in", ["pending", "accepted"]),
+        ], limit=1)
+
+        if not existing:
+            task = self.env["serviflow.task"].sudo().create({
+                "name": f"PPTO - {lead.name}",
+                "opportunity_id": lead.id,
+                "task_type": "budget",
+                "state": "pending",
+                "note": self.technical_notes,
+            })
+
+            task._create_group_activities()
+
+        lead.message_post(
+            body=(
+                "Solicitud de presupuesto técnico creada.<br/>"
+                f"<b>Indicaciones:</b> {self.technical_notes}"
+            )
+        )
+
+        return {
+            "type": "ir.actions.act_window_close"
+        }

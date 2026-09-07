@@ -16,6 +16,7 @@
         "security/ir.model.access.csv",
         "views/serviflow_reviewer_config_views.xml",
         "views/serviflow_task_views.xml",
+        "views/serviflow_request_budget_wizard_views.xml",
     ],
     "assets": {
         "web.assets_backend": [
