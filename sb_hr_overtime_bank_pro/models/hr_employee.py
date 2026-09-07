@@ -229,6 +229,16 @@ class HrEmployee(models.Model):
         }
         
     def _get_calendar_weekly_hours(self):
+        """
+        Obtiene las horas semanales teóricas configuradas
+        en el resource.calendar del empleado.
+
+        No tiene en cuenta vacaciones, festivos ni ausencias.
+        Solo utiliza la estructura habitual del horario laboral.
+
+        Este valor se utiliza para congelar las horas previstas
+        dentro de un periodo semanal flexible.
+        """
         self.ensure_one()
 
         calendar = self.resource_calendar_id
@@ -238,17 +248,16 @@ class HrEmployee(models.Model):
 
         weekly_hours = 0.0
 
-        attendances = calendar.attendance_ids
-
-        for attendance in attendances:
+        for attendance in calendar.attendance_ids:
             hour_from = attendance.hour_from or 0.0
             hour_to = attendance.hour_to or 0.0
 
             if hour_to > hour_from:
                 weekly_hours += hour_to - hour_from
 
-        # Calendarios alternos de 2 semanas:
-        # attendance_ids contiene ambas semanas.
+        # Calendarios alternos de dos semanas:
+        # attendance_ids contiene las líneas de ambas semanas,
+        # así que calculamos la media semanal.
         if (
             "two_weeks_calendar" in calendar._fields
             and calendar.two_weeks_calendar

@@ -724,24 +724,53 @@ class HrAttendance(models.Model):
         week_start,
         week_end,
     ):
-        period = self.env[
-            "hr.employee.overtime.period"
-        ].search([
+        """
+        Devuelve las horas semanales previstas correspondientes
+        al periodo semanal flexible.
+
+        Los periodos nuevos ya tienen weekly_expected_hours
+        congelado.
+
+        Para periodos antiguos creados antes de existir ese campo,
+        si weekly_expected_hours == 0, recuperamos automáticamente
+        las horas del resource.calendar actual y las guardamos
+        una única vez en el periodo.
+        """
+
+        Period = self.env["hr.employee.overtime.period"]
+
+        period = Period.search([
             ("employee_id", "=", employee.id),
             ("date_from", "<=", week_start),
             "|",
             ("date_to", "=", False),
             ("date_to", ">=", week_end),
             ("calculation_mode", "=", "weekly"),
-        ], order="date_from desc", limit=1)
+        ], order="date_from desc, id desc", limit=1)
 
-        if period and period.weekly_expected_hours:
+        # No existe un periodo semanal válido para esta semana.
+        if not period:
+            return 0.0
+
+        if period.weekly_expected_hours > 0:
             return round(
                 period.weekly_expected_hours,
                 4,
             )
 
-        return 0.0
+        weekly_hours = employee._get_calendar_weekly_hours()
+
+        if weekly_hours <= 0:
+            return 0.0
+
+        period.write({
+            "weekly_expected_hours": weekly_hours,
+        })
+
+        return round(
+            weekly_hours,
+            4,
+        )
 
     def _get_worked_hours_for_week(
         self,
@@ -801,16 +830,14 @@ class HrAttendance(models.Model):
             week_start
         )
 
-        if mode_at_week_start != "weekly":
-            return
-
-        # También comprobamos el final de semana.
-        # Esto evita semanas mixtas por configuraciones incorrectas.
         mode_at_week_end = employee._get_overtime_mode_for_date(
             week_end
         )
 
-        if mode_at_week_end != "weekly":
+        if (
+            mode_at_week_start != "weekly"
+            or mode_at_week_end != "weekly"
+        ):
             return
 
         weekly_entries = OvertimeEntry.search([
@@ -833,7 +860,7 @@ class HrAttendance(models.Model):
             self.AUTO_REF_DAY,
             "Migración automática desde Asistencias",
         ]
-        
+
         if week_end >= today:
 
             if weekly_entry:
@@ -842,8 +869,6 @@ class HrAttendance(models.Model):
                     skip_comp_sync=True,
                 ).unlink()
 
-            # Si esta semana pertenece completamente al modo weekly,
-            # no deben existir movimientos diarios automáticos.
             current_daily_entries = OvertimeEntry.search([
                 ("employee_id", "=", employee.id),
                 ("date", ">=", week_start),
@@ -862,7 +887,6 @@ class HrAttendance(models.Model):
                 ).unlink()
 
             return
-
 
         daily_entries = OvertimeEntry.search([
             ("employee_id", "=", employee.id),
@@ -893,11 +917,30 @@ class HrAttendance(models.Model):
             week_end,
         )
 
+        expected_hours = round(
+            expected_hours,
+            4,
+        )
+
+        worked_hours = round(
+            worked_hours,
+            4,
+        )
+
+        if expected_hours <= 0:
+
+            if weekly_entry:
+                weekly_entry.with_context(
+                    skip_overtime_limit=True,
+                    skip_comp_sync=True,
+                ).unlink()
+
+            return
+
         difference = round(
             worked_hours - expected_hours,
             4,
         )
-
 
         if abs(difference) < 0.01:
 
@@ -912,7 +955,6 @@ class HrAttendance(models.Model):
         if difference > 0:
             entry_type = "extra"
             entry_hours = difference
-
         else:
             entry_type = "early_exit"
             entry_hours = abs(difference)
@@ -943,7 +985,6 @@ class HrAttendance(models.Model):
             "skip_overtime_limit": True,
             "skip_comp_sync": True,
         }
-
 
         if weekly_entry:
             weekly_entry.with_context(
