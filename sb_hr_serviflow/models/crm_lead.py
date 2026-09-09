@@ -6,6 +6,9 @@ class CrmLead(models.Model):
 
     def write(self, vals):
         res = super().write(vals)
+        
+        if self.env.context.get("serviflow_from_wizard"):
+            return res
 
         if "stage_id" not in vals:
             return res
@@ -34,3 +37,17 @@ class CrmLead(models.Model):
             task._create_group_activities()
 
         return res
+    
+    def action_open_serviflow_budget_wizard(self):
+        self.ensure_one()
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Solicitar Presupuesto Técnico",
+            "res_model": "serviflow.request.budget.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_opportunity_id": self.id,
+            },
+        }

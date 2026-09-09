@@ -68,11 +68,7 @@
                             string="Crear / Abrir Presupuesto"
                             type="object"
                             class="btn-primary"
-                            invisible="task_type != 'budget' or state != 'accepted'"/>
-                    <button name="action_open_serviflow_budget_wizard"
-                            string="Solicitar PPTO Técnico"
-                            type="object"
-                            class="btn-primary"/>   
+                            invisible="task_type != 'budget' or state != 'accepted'"/>   
                     <field name="state" widget="statusbar"/>
                 </header>
 

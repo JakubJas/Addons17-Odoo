@@ -54,7 +54,7 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
             )
 
         # Cambiar etapa
-        lead.write({
+        lead.with_context(serviflow_from_wizard=True).write({
             "stage_id": stage.id,
         })
 
