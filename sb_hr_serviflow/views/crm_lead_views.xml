@@ -8,10 +8,16 @@
         <field name="arch" type="xml">
 
             <xpath expr="//header" position="inside">
+
+                <field name="is_serviflow_budget_requested"
+                       invisible="1"/>
+
                 <button name="action_open_serviflow_budget_wizard"
                         string="Solicitar PPTO Técnico"
                         type="object"
-                        class="btn-primary"/>
+                        class="btn-primary"
+                        invisible="is_serviflow_budget_requested"/>
+
             </xpath>
 
         </field>

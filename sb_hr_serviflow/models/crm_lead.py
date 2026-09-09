@@ -1,43 +1,22 @@
-from odoo import models
+from odoo import api, fields, models, _
+from odoo.exceptions import UserError
 
 
 class CrmLead(models.Model):
     _inherit = "crm.lead"
 
-    def write(self, vals):
-        res = super().write(vals)
-        
-        if self.env.context.get("serviflow_from_wizard"):
-            return res
+    is_serviflow_budget_requested = fields.Boolean(
+        string="Presupuesto técnico solicitado",
+        compute="_compute_is_serviflow_budget_requested",
+    )
 
-        if "stage_id" not in vals:
-            return res
-
-        target_stage = self.env["crm.stage"].browse(vals["stage_id"])
-
-        if target_stage.name != "Solicitado Presupuesto Técnico":
-            return res
-
+    @api.depends("stage_id")
+    def _compute_is_serviflow_budget_requested(self):
         for lead in self:
-            existing = self.env["serviflow.task"].search_count([
-                ("opportunity_id", "=", lead.id),
-                ("state", "in", ["pending", "accepted"]),
-            ])
+            lead.is_serviflow_budget_requested = (
+                lead.stage_id.name == "Solicitado Presupuesto Técnico"
+            )
 
-            if existing:
-                continue
-
-            task = self.env["serviflow.task"].create({
-                "name": f"PPTO - {lead.name}",
-                "opportunity_id": lead.id,
-                "task_type": "budget",
-                "note": f"Solicitud creada automáticamente desde CRM para {lead.name}.",
-            })
-
-            task._create_group_activities()
-
-        return res
-    
     def action_open_serviflow_budget_wizard(self):
         self.ensure_one()
 
@@ -51,3 +30,31 @@ class CrmLead(models.Model):
                 "default_opportunity_id": self.id,
             },
         }
+
+    @api.model
+    def get_serviflow_budget_stage_id(self):
+        stage = self.env["crm.stage"].search([
+            ("name", "=", "Solicitado Presupuesto Técnico")
+        ], limit=1)
+
+        return stage.id if stage else False
+
+    def write(self, vals):
+        # Si el cambio viene del wizard, permitimos el cambio sin bloquearlo
+        if self.env.context.get("serviflow_from_wizard"):
+            return super().write(vals)
+
+        # Si alguien intenta mover manualmente a la etapa técnica,
+        # por ahora bloqueamos para obligar a pasar por el wizard.
+        if "stage_id" in vals:
+            stage = self.env["crm.stage"].browse(vals["stage_id"])
+
+            if stage.name == "Solicitado Presupuesto Técnico":
+                raise UserError(
+                    _(
+                        "Para solicitar un presupuesto técnico debes usar "
+                        "el botón 'Solicitar PPTO Técnico'."
+                    )
+                )
+
+        return super().write(vals)

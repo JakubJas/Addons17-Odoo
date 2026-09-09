@@ -53,12 +53,13 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
                 _("No se encontró la etapa 'Solicitado Presupuesto Técnico'.")
             )
 
-        # Cambiar etapa
-        lead.with_context(serviflow_from_wizard=True).write({
+        # Cambio de etapa controlado desde wizard
+        lead.with_context(
+            serviflow_from_wizard=True
+        ).write({
             "stage_id": stage.id,
         })
 
-        # Buscar si ya existe una solicitud activa
         existing = self.env["serviflow.task"].search([
             ("opportunity_id", "=", lead.id),
             ("task_type", "=", "budget"),
@@ -84,5 +85,5 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
         )
 
         return {
-            "type": "ir.actions.act_window_close"
+            "type": "ir.actions.act_window_close",
         }
