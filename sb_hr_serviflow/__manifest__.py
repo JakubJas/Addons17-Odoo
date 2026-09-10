@@ -23,6 +23,7 @@
         "web.assets_backend": [
             "sb_hr_serviflow/static/src/js/serviflow_activity_menu.js",
             "sb_hr_serviflow/static/src/xml/serviflow_activity_menu.xml",
+            "sb_hr_serviflow/static/src/js/crm_serviflow_kanban.js",
         ],
     },
     'installable': True,
