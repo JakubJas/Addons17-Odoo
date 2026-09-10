@@ -53,7 +53,31 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
                 _("No se encontró la etapa 'Solicitado Presupuesto Técnico'.")
             )
 
-        # Cambio de etapa controlado desde wizard
+        priority_labels = {
+            "0": "Normal",
+            "1": "Baja",
+            "2": "Alta",
+            "3": "Muy alta",
+        }
+
+        priority_name = priority_labels.get(
+            self.priority,
+            "Normal"
+        )
+
+        requested_date_text = (
+            self.requested_date.strftime("%d/%m/%Y")
+            if self.requested_date
+            else "Sin fecha indicada"
+        )
+
+        serviflow_note = (
+            f"PRIORIDAD: {priority_name}\n"
+            f"FECHA DESEADA: {requested_date_text}\n\n"
+            f"INDICACIONES:\n"
+            f"{self.technical_notes.strip()}"
+        )
+
         lead.with_context(
             serviflow_from_wizard=True
         ).write({
@@ -72,14 +96,16 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
                 "opportunity_id": lead.id,
                 "task_type": "budget",
                 "state": "pending",
-                "note": self.technical_notes,
+                "note": serviflow_note,
             })
 
             task._create_group_activities()
 
         lead.message_post(
             body=(
-                "Solicitud de presupuesto técnico creada.<br/>"
+                "<b>Solicitud de presupuesto técnico creada</b><br/>"
+                f"<b>Prioridad:</b> {priority_name}<br/>"
+                f"<b>Fecha deseada:</b> {requested_date_text}<br/>"
                 f"<b>Indicaciones:</b> {self.technical_notes}"
             )
         )

@@ -88,8 +88,13 @@
                                groups="sb_hr_serviflow.group_serviflow_manager" 
                                invisible="task_type != 'budget'"/>
                     </group>
-                    <group>
-                        <field name="note"/>
+
+                    <group string="Datos de la solicitud">
+                        <group>
+                            <field name="note"
+                                string="Indicaciones para Oficina Técnica"
+                                placeholder="Sin indicaciones adicionales..."/>
+                        </group>
                     </group>
                 </sheet>
 
