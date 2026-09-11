@@ -604,7 +604,7 @@ class ServiflowTask(models.Model):
     # DEVOLVER A TÉCNICO / CORRECCIÓN
     # =========================================================
 
-    def _send_back_to_technical(self):
+    def _send_back_to_technical(self, rejection_reason=False):
         for task in self:
 
             opportunity = task.opportunity_id
@@ -692,9 +692,12 @@ class ServiflowTask(models.Model):
                 ),
 
                 "note": (
-                    f"El presupuesto fue rechazado por "
-                    f"{self.env.user.name}. "
-                    "Revisar y corregir."
+                    f"Presupuesto rechazado por {self.env.user.name}."
+                    + (
+                        f"\n\nMOTIVO DEL RECHAZO:\n{rejection_reason}"
+                        if rejection_reason
+                        else ""
+                    )
                 ),
             })
 
@@ -926,3 +929,33 @@ class ServiflowTask(models.Model):
             ),
             "round": review.review_round,
         } for review in reviews]
+        
+    def action_open_reject_wizard(self):
+        self.ensure_one()
+
+        if self.task_type != "review":
+            raise UserError(
+                "Esta tarea no es una revisión."
+            )
+
+        if self.assigned_user_id != self.env.user:
+            raise UserError(
+                "Solo el revisor asignado puede rechazar esta revisión."
+            )
+
+        if self.review_result != "pending":
+            raise UserError(
+                "Esta revisión ya fue procesada."
+            )
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Rechazar revisión",
+            "res_model": "serviflow.reject.wizard",
+            "views": [[False, "form"]],
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_task_id": self.id,
+            },
+        }

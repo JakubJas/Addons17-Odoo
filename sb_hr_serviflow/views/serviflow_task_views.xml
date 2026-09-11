@@ -59,7 +59,7 @@
                             type="object"
                             class="btn-success"
                             invisible="task_type != 'review' or review_result != 'pending' or assigned_user_id != uid"/>
-                    <button name="action_review_reject"
+                    <button name="action_open_reject_wizard"
                             string="Rechazar"
                             type="object"
                             class="btn-danger"

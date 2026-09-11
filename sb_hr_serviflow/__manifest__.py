@@ -18,6 +18,7 @@
         "views/serviflow_task_views.xml",
         "views/serviflow_request_budget_wizard_views.xml",
         "views/crm_lead_views.xml",
+        "views/serviflow_reject_wizard_views.xml",
     ],
     "assets": {
         "web.assets_backend": [
