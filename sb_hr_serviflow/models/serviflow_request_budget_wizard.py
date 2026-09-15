@@ -97,6 +97,9 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
                 "task_type": "budget",
                 "state": "pending",
                 "note": serviflow_note,
+
+                "requested_by_user_id": self.env.user.id,
+                "requested_at": fields.Datetime.now(),
             })
 
             task._create_group_activities()

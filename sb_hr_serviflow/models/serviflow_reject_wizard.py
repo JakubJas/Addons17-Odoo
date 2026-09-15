@@ -49,6 +49,8 @@ class ServiflowRejectWizard(models.TransientModel):
             "review_result": "rejected",
             "state": "done",
             "accepted_user_id": self.env.user.id,
+            "reviewed_at": fields.Datetime.now(),
+            "rejection_reason": self.rejection_reason.strip(),
         })
 
         task._close_user_activities()

@@ -104,19 +104,48 @@ class ServiflowTask(models.Model):
         tracking=True,
         domain="[('opportunity_id', '=', opportunity_id)]",
     )
+    
+    requested_by_user_id = fields.Many2one(
+        "res.users",
+        string="Solicitado por",
+        tracking=True,
+    )
+
+    requested_at = fields.Datetime(
+        string="Fecha de solicitud",
+        tracking=True,
+    )
+
+    accepted_at = fields.Datetime(
+        string="Fecha de aceptación",
+        tracking=True,
+    )
+
+    completed_at = fields.Datetime(
+        string="Fecha PPTO terminado",
+        tracking=True,
+    )
+
+    reviewed_at = fields.Datetime(
+        string="Fecha de revisión",
+        tracking=True,
+    )
+
+    final_approved_at = fields.Datetime(
+        string="Fecha aprobación final",
+        tracking=True,
+    )
+
+    rejection_reason = fields.Text(
+        string="Motivo de rechazo",
+        tracking=True,
+    )
 
     # =========================================================
     # RECUPERAR / ASEGURAR PRESUPUESTO
     # =========================================================
 
     def _ensure_sale_order(self):
-        """
-        Garantiza que la tarea tenga un presupuesto asociado.
-
-        Si sale_order_id está vacío, busca el último presupuesto
-        vinculado a la misma oportunidad CRM y lo guarda en la tarea.
-        """
-
         for task in self:
 
             if task.sale_order_id:
@@ -157,6 +186,7 @@ class ServiflowTask(models.Model):
                 "state": "accepted",
                 "accepted_user_id": self.env.user.id,
                 "assigned_user_id": self.env.user.id,
+                "accepted_at": fields.Datetime.now(),
             })
 
             task.opportunity_id.write({
@@ -200,22 +230,10 @@ class ServiflowTask(models.Model):
 
             task.write({
                 "state": "done",
+                "completed_at": fields.Datetime.now(),
             })
 
             task._close_user_activities()
-
-            done_stage = self.env["crm.stage"].search([
-                ("name", "=", "Presupuestado")
-            ], limit=1)
-
-            if not done_stage:
-                raise UserError(
-                    "No se encontró la etapa Presupuestado."
-                )
-
-            task.opportunity_id.write({
-                "stage_id": done_stage.id,
-            })
 
             task._create_review_tasks()
 
@@ -479,8 +497,8 @@ class ServiflowTask(models.Model):
                 "review_result": "approved",
                 "state": "done",
                 "accepted_user_id": self.env.user.id,
+                "reviewed_at": fields.Datetime.now(),
             })
-
             task._close_user_activities()
 
             task.message_post(
@@ -521,6 +539,7 @@ class ServiflowTask(models.Model):
                 "review_result": "rejected",
                 "state": "done",
                 "accepted_user_id": self.env.user.id,
+                "reviewed_at": fields.Datetime.now(),
             })
 
             task._close_user_activities()
@@ -564,12 +583,14 @@ class ServiflowTask(models.Model):
                 ),
             ])
 
+            # Si alguno rechazó, no avanzamos
             if any(
                 review.review_result == "rejected"
                 for review in reviews
             ):
                 return
 
+            # Si queda alguno pendiente, tampoco
             if (
                 not reviews
                 or any(
@@ -578,25 +599,32 @@ class ServiflowTask(models.Model):
                 )
             ):
                 return
+            
+            # Ahora sí sabemos que todos han aprobado
+            reviews.write({
+                "final_approved_at": fields.Datetime.now(),
+            })
 
-            approved_stage = self.env["crm.stage"].search([
-                ("name", "=", "Aprobado")
+            # Todos aprobados
+            presupuestado_stage = self.env["crm.stage"].search([
+                ("name", "=", "Presupuestado")
             ], limit=1)
 
-            if not approved_stage:
+            if not presupuestado_stage:
                 raise UserError(
-                    "No se encontró la etapa Aprobado."
+                    "No se encontró la etapa Presupuestado."
                 )
 
-            opportunity.write({
-                "stage_id": approved_stage.id,
+            opportunity.with_context(
+                serviflow_from_wizard=True
+            ).write({
+                "stage_id": presupuestado_stage.id,
             })
 
             opportunity.message_post(
                 body=(
-                    "Presupuesto aprobado tras completar "
-                    f"la ronda {last_round_review.review_round} "
-                    "de revisión."
+                    "Presupuesto validado por todos los revisores "
+                    f"en la ronda {last_round_review.review_round}."
                 )
             )
 
@@ -620,8 +648,10 @@ class ServiflowTask(models.Model):
                 ("name", "=", "Solicitado Presupuesto Técnico")
             ], limit=1)
 
-            if technical_stage:
-                opportunity.write({
+            if technical_stage and opportunity.stage_id != technical_stage:
+                opportunity.with_context(
+                    serviflow_from_wizard=True
+                ).write({
                     "stage_id": technical_stage.id,
                 })
 
