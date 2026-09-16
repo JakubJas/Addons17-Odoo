@@ -1,98 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- ===================================================== -->
-    <!-- LISTA / TREE -->
-    <!-- ===================================================== -->
-
     <record id="view_serviflow_task_tree" model="ir.ui.view">
         <field name="name">serviflow.task.tree</field>
         <field name="model">serviflow.task</field>
         <field name="arch" type="xml">
-
             <tree string="Solicitudes Serviflow">
-
-                <!-- Campos necesarios para modifiers -->
-                <field name="task_type" invisible="1"/>
-                <field name="accepted_user_id" invisible="1"/>
-
-                <!-- Información principal -->
                 <field name="name"/>
                 <field name="opportunity_id"/>
+                <field name="project_id"/>
+                <field name="project_task_id"/>
                 <field name="sale_order_id"/>
-                <field name="project_id" readonly="1"/>
-                <field name="project_task_id" readonly="1"/>
-
-                <field name="state" readonly="1"/>
-                <field name="review_result" readonly="1"/>
-                <field name="review_round" readonly="1"/>
-
-                <field name="assigned_user_id" readonly="1"/>
-
-                <!-- Trazabilidad -->
-                <field name="requested_by_user_id" readonly="1"/>
-                <field name="requested_at" readonly="1"/>
-                <field name="accepted_at" readonly="1"/>
-                <field name="completed_at" readonly="1"/>
-                <field name="reviewed_at" readonly="1"/>
-
+                <field name="task_type"/>
+                <field name="state"/>
+                <field name="review_result"/>
+                <field name="review_round"/>
+                <field name="assigned_user_id"/>
+                <field name="accepted_user_id"/>
+                <field name="requested_by_user_id"/>
+                <field name="requested_at"/>
+                <field name="accepted_at"/>
+                <field name="completed_at"/>
+                <field name="reviewed_at"/>
                 <field name="create_date"/>
-
-                <!-- Acciones rápidas -->
-
-                <button name="action_accept"
-                        string="Aceptar"
-                        type="object"
-                        class="btn-primary"
-                        invisible="state != 'pending' or task_type != 'budget'"/>
-
-                <button name="action_done"
-                        string="Hecho"
-                        type="object"
-                        class="btn-success"
-                        invisible="state != 'accepted'
-                                   or accepted_user_id != uid
-                                   or task_type != 'budget'"/>
-
             </tree>
-
         </field>
     </record>
-
-
-    <!-- ===================================================== -->
-    <!-- FORMULARIO -->
-    <!-- ===================================================== -->
 
     <record id="view_serviflow_task_form" model="ir.ui.view">
         <field name="name">serviflow.task.form</field>
         <field name="model">serviflow.task</field>
-
         <field name="arch" type="xml">
-
             <form string="Solicitud Serviflow">
-
-                <!-- ================================================= -->
-                <!-- HEADER -->
-                <!-- ================================================= -->
-
                 <header>
-
-                    <button name="action_accept"
-                            string="Aceptar"
-                            type="object"
-                            class="btn-primary"
-                            invisible="state != 'pending'
-                                       or task_type != 'budget'"/>
-
-                    <button name="action_done"
-                            string="Marcar como hecho"
-                            type="object"
-                            class="btn-success"
-                            invisible="state != 'accepted'
-                                       or accepted_user_id != uid
-                                       or task_type != 'budget'"/>
-
                     <button name="action_cancel"
                             string="Cancelar"
                             type="object"
@@ -103,350 +43,161 @@
                             type="object"
                             class="btn-secondary"
                             groups="sb_hr_serviflow.group_serviflow_manager"
-                            invisible="state in ('done', 'cancelled')
-                                       or task_type != 'budget'"/>
+                            invisible="state in ('done', 'cancelled') or task_type != 'budget'"/>
 
                     <button name="action_review_approve"
                             string="Aprobar"
                             type="object"
                             class="btn-success"
-                            invisible="task_type != 'review'
-                                       or review_result != 'pending'
-                                       or assigned_user_id != uid"/>
+                            invisible="task_type != 'review' or review_result != 'pending' or assigned_user_id != uid"/>
 
                     <button name="action_open_reject_wizard"
                             string="Rechazar"
                             type="object"
                             class="btn-danger"
-                            invisible="task_type != 'review'
-                                       or review_result != 'pending'
-                                       or assigned_user_id != uid"/>
+                            invisible="task_type != 'review' or review_result != 'pending' or assigned_user_id != uid"/>
 
-                    <button name="action_create_quotation"
-                            string="Crear / Abrir Presupuesto"
-                            type="object"
-                            class="btn-primary"
-                            invisible="task_type != 'budget'
-                                       or state != 'accepted'"/>
-
-                    <field name="state"
-                           widget="statusbar"
-                           readonly="1"/>
-
+                    <field name="state" widget="statusbar" readonly="1"/>
                 </header>
 
-
-                <!-- ================================================= -->
-                <!-- BODY -->
-                <!-- ================================================= -->
-
                 <sheet>
-
-                    <!-- ================================================= -->
-                    <!-- DATOS PRINCIPALES -->
-                    <!-- ================================================= -->
-
                     <group string="Datos principales">
-
                         <group>
-
-                            <field name="name"/>
-
-                            <field name="task_type"
-                                   readonly="1"/>
-
-                            <field name="opportunity_id"
-                                   readonly="1"/>
-
-                            <field name="sale_order_id"
-                                   readonly="1"/>
-
+                            <field name="name" readonly="1"/>
+                            <field name="task_type" readonly="1"/>
+                            <field name="opportunity_id" readonly="1"/>
+                            <field name="project_id" readonly="1"/>
+                            <field name="project_task_id" readonly="1"/>
+                            <field name="sale_order_id" readonly="1"/>
                         </group>
 
                         <group>
-
-                            <field name="assigned_user_id"
-                                   readonly="1"/>
-
-                            <field name="accepted_user_id"
-                                   readonly="1"/>
-
+                            <field name="assigned_user_id" readonly="1"/>
+                            <field name="accepted_user_id" readonly="1"/>
                             <field name="review_result"
                                    readonly="1"
                                    invisible="task_type != 'review'"/>
-
                             <field name="review_round"
                                    readonly="1"
                                    invisible="task_type != 'review'"/>
-
                         </group>
-
                     </group>
 
-
-                    <!-- ================================================= -->
-                    <!-- REASIGNACIÓN -->
-                    <!-- ================================================= -->
-
-                    <group string="Reasignación"
+                    <group string="Reasignacion"
                            groups="sb_hr_serviflow.group_serviflow_manager"
-                           invisible="task_type != 'budget'
-                                      or state in ('done', 'cancelled')">
-
+                           invisible="task_type != 'budget' or state in ('done', 'cancelled')">
                         <field name="reassign_user_id"/>
-
                     </group>
-
-
-                    <!-- ================================================= -->
-                    <!-- DATOS DE LA SOLICITUD -->
-                    <!-- ================================================= -->
 
                     <group string="Datos de la solicitud"
                            invisible="task_type != 'budget'">
-
                         <field name="note"
-                               string="Indicaciones para Oficina Técnica"
+                               string="Indicaciones para Oficina Tecnica"
                                readonly="1"
                                placeholder="Sin indicaciones adicionales..."/>
-
                     </group>
 
-
-                    <!-- ================================================= -->
-                    <!-- RECHAZO -->
-                    <!-- ================================================= -->
-
-                    <group string="Información de rechazo"
-                           invisible="task_type != 'review'
-                                      or review_result != 'rejected'">
-
-                        <field name="rejection_reason"
-                               readonly="1"
-                               nolabel="1"/>
-
+                    <group string="Informacion de rechazo"
+                           invisible="task_type != 'review' or review_result != 'rejected'">
+                        <field name="rejection_reason" readonly="1" nolabel="1"/>
                     </group>
-
-
-                    <!-- ================================================= -->
-                    <!-- TRAZABILIDAD -->
-                    <!-- ================================================= -->
 
                     <group string="Trazabilidad">
-
                         <group>
-
-                            <field name="requested_by_user_id"
-                                   readonly="1"/>
-
-                            <field name="requested_at"
-                                   readonly="1"/>
-
-                            <field name="accepted_at"
-                                   readonly="1"/>
-
+                            <field name="requested_by_user_id" readonly="1"/>
+                            <field name="requested_at" readonly="1"/>
+                            <field name="accepted_at" readonly="1"/>
                         </group>
-
                         <group>
-
-                            <field name="completed_at"
-                                   readonly="1"/>
-
-                            <field name="reviewed_at"
-                                   readonly="1"/>
-
-                            <field name="final_approved_at"
-                                   readonly="1"/>
-
+                            <field name="completed_at" readonly="1"/>
+                            <field name="reviewed_at" readonly="1"/>
+                            <field name="final_approved_at" readonly="1"/>
                         </group>
-
                     </group>
-
                 </sheet>
 
                 <chatter/>
-
             </form>
-
         </field>
     </record>
-
-
-    <!-- ===================================================== -->
-    <!-- SEARCH VIEW -->
-    <!-- ===================================================== -->
 
     <record id="view_serviflow_task_search" model="ir.ui.view">
         <field name="name">serviflow.task.search</field>
         <field name="model">serviflow.task</field>
-
         <field name="arch" type="xml">
-
             <search string="Buscar solicitudes">
-
-                <!-- Campos de búsqueda -->
-
                 <field name="name"/>
-
                 <field name="opportunity_id"/>
-
+                <field name="project_id"/>
+                <field name="project_task_id"/>
                 <field name="sale_order_id"/>
-
                 <field name="assigned_user_id"/>
-
                 <field name="requested_by_user_id"/>
-
-
-                <!-- ================================================= -->
-                <!-- FILTROS -->
-                <!-- ================================================= -->
 
                 <filter name="pending"
                         string="Pendientes"
                         domain="[('state', '=', 'pending')]"/>
-
                 <filter name="accepted"
                         string="Aceptadas"
                         domain="[('state', '=', 'accepted')]"/>
-
                 <filter name="reviews_pending"
-                        string="Pendientes de revisión"
-                        domain="[
-                            ('task_type', '=', 'review'),
-                            ('review_result', '=', 'pending')
-                        ]"/>
-
+                        string="Pendientes de revision"
+                        domain="[('task_type', '=', 'review'), ('review_result', '=', 'pending')]"/>
                 <filter name="approved_reviews"
                         string="Revisiones aprobadas"
-                        domain="[
-                            ('task_type', '=', 'review'),
-                            ('review_result', '=', 'approved')
-                        ]"/>
-
+                        domain="[('task_type', '=', 'review'), ('review_result', '=', 'approved')]"/>
                 <filter name="rejected_reviews"
                         string="Rechazadas"
-                        domain="[
-                            ('task_type', '=', 'review'),
-                            ('review_result', '=', 'rejected')
-                        ]"/>
-
+                        domain="[('task_type', '=', 'review'), ('review_result', '=', 'rejected')]"/>
                 <filter name="done"
                         string="Completadas"
                         domain="[('state', '=', 'done')]"/>
-
                 <separator/>
-
                 <filter name="my_tasks"
                         string="Mis tareas"
                         domain="[('assigned_user_id', '=', uid)]"/>
 
-
-                <!-- ================================================= -->
-                <!-- AGRUPAR POR -->
-                <!-- ================================================= -->
-
-                <group expand="0"
-                       string="Agrupar por">
-
+                <group expand="0" string="Agrupar por">
                     <filter name="group_task_type"
                             string="Tipo"
                             context="{'group_by': 'task_type'}"/>
-
                     <filter name="group_state"
                             string="Estado"
                             context="{'group_by': 'state'}"/>
-
                     <filter name="group_review_result"
-                            string="Resultado revisión"
+                            string="Resultado revision"
                             context="{'group_by': 'review_result'}"/>
-
                     <filter name="group_assigned_user"
                             string="Usuario asignado"
                             context="{'group_by': 'assigned_user_id'}"/>
-
                     <filter name="group_requested_by"
                             string="Solicitado por"
                             context="{'group_by': 'requested_by_user_id'}"/>
-
                     <filter name="group_review_round"
                             string="Ronda"
                             context="{'group_by': 'review_round'}"/>
-
+                    <filter name="group_project"
+                            string="Proyecto"
+                            context="{'group_by': 'project_id'}"/>
                 </group>
-
             </search>
-
         </field>
     </record>
 
-
-    <!-- ===================================================== -->
-    <!-- ACCIÓN TÉCNICO -->
-    <!-- ===================================================== -->
-
-    <record id="action_serviflow_task_user"
-            model="ir.actions.act_window">
-
-        <field name="name">Mis Solicitudes</field>
-
-        <field name="res_model">serviflow.task</field>
-
-        <field name="view_mode">
-            tree,form
-        </field>
-
-        <field name="search_view_id"
-               ref="view_serviflow_task_search"/>
-
-        <field name="domain">
-            [
-                '&amp;',
-                ('task_type', '=', 'budget'),
-                '|',
-                ('state', '=', 'pending'),
-                ('assigned_user_id', '=', uid)
-            ]
-        </field>
-
-    </record>
-
-
-    <!-- ===================================================== -->
-    <!-- ACCIÓN RESPONSABLE -->
-    <!-- ===================================================== -->
-
-    <record id="action_serviflow_task_manager"
-            model="ir.actions.act_window">
-
+    <record id="action_serviflow_task_manager" model="ir.actions.act_window">
         <field name="name">Todas las Solicitudes</field>
-
         <field name="res_model">serviflow.task</field>
-
         <field name="view_mode">tree,form</field>
-
-        <field name="search_view_id"
-               ref="view_serviflow_task_search"/>
-
+        <field name="search_view_id" ref="view_serviflow_task_search"/>
     </record>
 
-
-    <!-- ===================================================== -->
-    <!-- MENÚS -->
-    <!-- ===================================================== -->
-
+    <!-- Los tecnicos no trabajan dentro de Serviflow. Mantienen ACL de modelo
+         porque el systray necesita leer/aceptar solicitudes, pero no tienen menu. -->
     <menuitem id="menu_serviflow_root"
               name="Serviflow"
               sequence="20"
+              groups="sb_hr_serviflow.group_serviflow_manager"
               web_icon="SB-Addons17,sb_hr_serviflow/static/description/icon.png"/>
-
-
-    <menuitem id="menu_serviflow_tasks_user"
-              name="Mis Solicitudes"
-              parent="menu_serviflow_root"
-              action="action_serviflow_task_user"
-              sequence="10"
-              groups="sb_hr_serviflow.group_serviflow_office_tech"/>
-
 
     <menuitem id="menu_serviflow_tasks_manager"
               name="Todas las Solicitudes"
