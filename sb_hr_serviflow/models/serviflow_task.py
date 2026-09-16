@@ -140,6 +140,18 @@ class ServiflowTask(models.Model):
         string="Motivo de rechazo",
         tracking=True,
     )
+    
+    project_id = fields.Many2one(
+        "project.project",
+        string="Proyecto",
+        tracking=True,
+    )
+
+    project_task_id = fields.Many2one(
+        "project.task",
+        string="Tarea de proyecto",
+        tracking=True,
+    )
 
     # =========================================================
     # RECUPERAR / ASEGURAR PRESUPUESTO
@@ -170,36 +182,101 @@ class ServiflowTask(models.Model):
     # =========================================================
 
     def action_accept(self):
-        for task in self:
+        self.ensure_one()
 
-            if task.task_type != "budget":
-                raise UserError(
-                    "Solo se pueden aceptar solicitudes de presupuesto técnico."
-                )
-
-            if task.state != "pending":
-                raise UserError(
-                    "Esta solicitud ya ha sido aceptada por otro usuario."
-                )
-
-            task.write({
-                "state": "accepted",
-                "accepted_user_id": self.env.user.id,
-                "assigned_user_id": self.env.user.id,
-                "accepted_at": fields.Datetime.now(),
-            })
-
-            task.opportunity_id.write({
-                "user_id": self.env.user.id,
-            })
-
-            task._close_user_activities()
-
-            task.message_post(
-                body=f"Solicitud aceptada por {self.env.user.name}"
+        if self.task_type != "budget":
+            raise UserError(
+                _("Solo se pueden aceptar solicitudes de presupuesto técnico.")
             )
 
-        return True
+        if self.state != "pending":
+            raise UserError(
+                _("Esta solicitud ya ha sido aceptada por otro usuario.")
+            )
+
+        if not self.project_id:
+            raise UserError(
+                _("La solicitud no tiene un proyecto asociado.")
+            )
+
+        if not self.project_task_id:
+            raise UserError(
+                _("La solicitud no tiene una tarea de proyecto asociada.")
+            )
+
+        # ---------------------------------------------------------
+        # Aceptar solicitud interna de Serviflow
+        # ---------------------------------------------------------
+
+        self.write({
+            "state": "accepted",
+            "accepted_user_id": self.env.user.id,
+            "assigned_user_id": self.env.user.id,
+            "accepted_at": fields.Datetime.now(),
+        })
+
+        # ---------------------------------------------------------
+        # Asignar la tarea REAL del proyecto al técnico
+        # ---------------------------------------------------------
+
+        self.project_task_id.sudo().write({
+            "user_ids": [(6, 0, [self.env.user.id])],
+        })
+        
+        in_progress_stage = self.env["project.task.type"].sudo().search([
+            ("name", "=", "En curso"),
+        ], limit=1)
+
+        if in_progress_stage:
+            self.project_task_id.sudo().write({
+                "stage_id": in_progress_stage.id,
+            })
+
+        # ---------------------------------------------------------
+        # Asignar también la oportunidad CRM
+        # ---------------------------------------------------------
+
+        self.opportunity_id.sudo().write({
+            "user_id": self.env.user.id,
+        })
+
+        # ---------------------------------------------------------
+        # Cerrar avisos de todos los técnicos
+        # ---------------------------------------------------------
+
+        self._close_user_activities()
+
+        # ---------------------------------------------------------
+        # Trazabilidad
+        # ---------------------------------------------------------
+
+        self.message_post(
+            body=(
+                f"Solicitud aceptada por "
+                f"<b>{self.env.user.name}</b>."
+            )
+        )
+
+        self.project_task_id.message_post(
+            body=(
+                f"Tarea aceptada y asignada a "
+                f"<b>{self.env.user.name}</b> mediante Serviflow."
+            )
+        )
+
+        # ---------------------------------------------------------
+        # Abrir directamente la tarea de Proyecto
+        # ---------------------------------------------------------
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.project_task_id.name,
+            "res_model": "project.task",
+            "res_id": self.project_task_id.id,
+            "views": [[False, "form"]],
+            "view_mode": "form",
+            "target": "current",
+        }
 
     # =========================================================
     # MARCAR SOLICITUD COMO HECHA

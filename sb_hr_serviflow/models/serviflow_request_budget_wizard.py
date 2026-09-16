@@ -44,6 +44,10 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
 
         lead = self.opportunity_id
 
+        # ---------------------------------------------------------
+        # Buscar etapa CRM
+        # ---------------------------------------------------------
+
         stage = self.env["crm.stage"].search([
             ("name", "=", "Solicitado Presupuesto Técnico")
         ], limit=1)
@@ -52,6 +56,10 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
             raise UserError(
                 _("No se encontró la etapa 'Solicitado Presupuesto Técnico'.")
             )
+
+        # ---------------------------------------------------------
+        # Preparar datos del popup
+        # ---------------------------------------------------------
 
         priority_labels = {
             "0": "Normal",
@@ -78,11 +86,9 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
             f"{self.technical_notes.strip()}"
         )
 
-        lead.with_context(
-            serviflow_from_wizard=True
-        ).write({
-            "stage_id": stage.id,
-        })
+        # ---------------------------------------------------------
+        # Comprobar si ya existe una solicitud activa
+        # ---------------------------------------------------------
 
         existing = self.env["serviflow.task"].search([
             ("opportunity_id", "=", lead.id),
@@ -90,19 +96,80 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
             ("state", "in", ["pending", "accepted"]),
         ], limit=1)
 
-        if not existing:
-            task = self.env["serviflow.task"].sudo().create({
-                "name": f"PPTO - {lead.name}",
-                "opportunity_id": lead.id,
-                "task_type": "budget",
-                "state": "pending",
-                "note": serviflow_note,
+        if existing:
+            raise UserError(
+                _("Ya existe una solicitud de presupuesto técnico activa para esta oportunidad.")
+            )
 
-                "requested_by_user_id": self.env.user.id,
-                "requested_at": fields.Datetime.now(),
-            })
+        # ---------------------------------------------------------
+        # Buscar estado inicial del proyecto
+        # ---------------------------------------------------------
 
-            task._create_group_activities()
+        pending_status = self.env["project.status"].sudo().search([
+            ("name", "=", "Pendiente"),
+        ], limit=1)
+
+        if not pending_status:
+            raise UserError(
+                _("No se encontró el estado de proyecto 'Pendiente'.")
+            )
+
+        # ---------------------------------------------------------
+        # Crear proyecto
+        # Solo nombre + estado.
+        # ---------------------------------------------------------
+
+        project = self.env["project.project"].sudo().create({
+            "name": lead.name,
+            "project_status": pending_status.id,
+        })
+
+        # ---------------------------------------------------------
+        # Crear tarea principal
+        # ---------------------------------------------------------
+
+        project_task = self.env["project.task"].sudo().create({
+            "name": "Preparar presupuesto técnico",
+            "project_id": project.id,
+        })
+
+        # ---------------------------------------------------------
+        # Crear solicitud Serviflow
+        # ---------------------------------------------------------
+
+        task = self.env["serviflow.task"].sudo().create({
+            "name": f"PPTO - {lead.name}",
+            "opportunity_id": lead.id,
+            "task_type": "budget",
+            "state": "pending",
+            "note": serviflow_note,
+
+            "project_id": project.id,
+            "project_task_id": project_task.id,
+
+            "requested_by_user_id": self.env.user.id,
+            "requested_at": fields.Datetime.now(),
+        })
+
+        # ---------------------------------------------------------
+        # Crear actividades para Oficina Técnica
+        # ---------------------------------------------------------
+
+        task._create_group_activities()
+
+        # ---------------------------------------------------------
+        # Cambiar etapa CRM
+        # ---------------------------------------------------------
+
+        lead.with_context(
+            serviflow_from_wizard=True
+        ).write({
+            "stage_id": stage.id,
+        })
+
+        # ---------------------------------------------------------
+        # Registrar trazabilidad en CRM
+        # ---------------------------------------------------------
 
         lead.message_post(
             body=(

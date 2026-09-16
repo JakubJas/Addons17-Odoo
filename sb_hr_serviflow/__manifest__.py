@@ -10,7 +10,7 @@
     'website': 'https://www.servibyte.com',
     'category': 'Tools',
     'license': 'LGPL-3',
-    'depends': ['base','crm','mail', 'sale', 'sale_crm'],
+    'depends': ['base','crm','mail', 'sale', 'sale_crm', 'project', 'project_hr'],
     'data': [
         "security/security.xml",
         "security/ir.model.access.csv",

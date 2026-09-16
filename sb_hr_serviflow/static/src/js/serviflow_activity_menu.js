@@ -11,6 +11,7 @@ patch(ActivityMenu.prototype, {
 
         this.orm = useService("orm");
         this.notification = useService("notification");
+        this.actionService = useService("action");
 
         this.serviflow = useState({
             tasks: [],
@@ -74,7 +75,7 @@ patch(ActivityMenu.prototype, {
 
     async acceptServiflowTask(taskId) {
         try {
-            await this.orm.call(
+            const action = await this.orm.call(
                 "serviflow.task",
                 "action_accept",
                 [[taskId]],
@@ -91,11 +92,17 @@ patch(ActivityMenu.prototype, {
             await this.loadServiflowTasks();
             await this.fetchSystrayActivities();
 
+            if (action) {
+                await this.actionService.doAction(action);
+            }
+
         } catch (error) {
+            console.error("Serviflow accept error:", error);
+
             this.notification.add(
-                "La solicitud ya no está disponible o no ha podido aceptarse.",
+                "No se ha podido aceptar la solicitud.",
                 {
-                    type: "warning",
+                    type: "danger",
                 }
             );
         }
