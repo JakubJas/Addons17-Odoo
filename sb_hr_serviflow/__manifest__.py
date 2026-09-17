@@ -1,6 +1,6 @@
 {
     'name': 'Serviflow',
-    'version': '17.0.1.0.4',
+    'version': '17.0.1.0.5',
     'summary': 'Flujo de trabajo entre departamentos/modulos',
     'description': """
         Este modulo permite gestionar:

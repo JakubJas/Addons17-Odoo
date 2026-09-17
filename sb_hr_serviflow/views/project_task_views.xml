@@ -5,28 +5,31 @@
         <field name="name">project.task.form.serviflow</field>
         <field name="model">project.task</field>
         <field name="inherit_id" ref="project.view_task_form2"/>
+        <field name="priority">90</field>
 
         <field name="arch" type="xml">
 
-            <!-- Campos técnicos para controlar visibilidad -->
-            <xpath expr="//form/sheet" position="before">
+            <!-- Campos técnicos -->
+            <xpath expr="//sheet" position="inside">
                 <field name="is_serviflow_budget_task" invisible="1"/>
                 <field name="serviflow_sale_order_id" invisible="1"/>
             </xpath>
 
-            <!-- Botón -->
-            <xpath expr="//form/header" position="inside">
+            <!-- Crear presupuesto -->
+            <xpath expr="//header" position="inside">
 
-                <button name="action_serviflow_create_quotation"
+                <button name="action_serviflow_quotation"
                         string="Crear presupuesto"
                         type="object"
                         class="btn-primary"
+                        icon="fa-file-text-o"
                         invisible="not is_serviflow_budget_task or serviflow_sale_order_id"/>
 
-                <button name="action_serviflow_create_quotation"
+                <button name="action_serviflow_quotation"
                         string="Abrir presupuesto"
                         type="object"
                         class="btn-secondary"
+                        icon="fa-external-link"
                         invisible="not is_serviflow_budget_task or not serviflow_sale_order_id"/>
 
             </xpath>
