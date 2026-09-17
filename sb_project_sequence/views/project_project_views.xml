@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        OCA project_key makes the key required in the project form view.
+        Our numeric key is generated in create(), so the field must be allowed
+        to stay empty while the record is still unsaved.
+    -->
+    <record id="edit_project_sequence_key" model="ir.ui.view">
+        <field name="name">project.project.form.sb.project.sequence</field>
+        <field name="model">project.project</field>
+        <field name="inherit_id" ref="project_key.edit_project_extend_with_key"/>
+        <field name="arch" type="xml">
+            <field name="key" position="attributes">
+                <attribute name="required">0</attribute>
+                <attribute name="readonly">1</attribute>
+            </field>
+        </field>
+    </record>
+</odoo>
