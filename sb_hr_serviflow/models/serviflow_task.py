@@ -90,6 +90,13 @@ class ServiflowTask(models.Model):
         tracking=True,
         domain="[('opportunity_id', '=', opportunity_id)]",
     )
+    
+    sale_order_ids = fields.Many2many(
+        "sale.order",
+        string="Presupuestos del proyecto",
+        related="project_id.serviflow_sale_order_ids",
+        readonly=True,
+    )
 
     requested_by_user_id = fields.Many2one(
         'res.users',
@@ -121,16 +128,68 @@ class ServiflowTask(models.Model):
     # -------------------------------------------------------------------------
 
     def _ensure_sale_order(self):
+
         for task in self:
-            if task.sale_order_id or not task.opportunity_id:
+
+            if (
+                task.project_id
+                and task.project_id.serviflow_sale_order_ids
+            ):
+
+                quotations = (
+                    task.project_id.serviflow_sale_order_ids
+                )
+
+                # Mantener el campo antiguo sincronizado
+                if (
+                    not task.sale_order_id
+                    or task.sale_order_id not in quotations
+                ):
+                    task.sudo().write({
+                        "sale_order_id": quotations[0].id,
+                    })
+
                 continue
 
-            sale_order = self.env['sale.order'].sudo().search([
-                ('opportunity_id', '=', task.opportunity_id.id),
-            ], order='create_date desc', limit=1)
+            if task.sale_order_id:
 
-            if sale_order:
-                task.sudo().write({'sale_order_id': sale_order.id})
+                if task.project_id:
+                    task.project_id.sudo().write({
+                        "serviflow_sale_order_ids": [
+                            (4, task.sale_order_id.id)
+                        ],
+                    })
+
+                continue
+
+            if not task.opportunity_id:
+                continue
+
+            quotations = self.env[
+                "sale.order"
+            ].sudo().search([
+                (
+                    "opportunity_id",
+                    "=",
+                    task.opportunity_id.id,
+                ),
+            ])
+
+            if not quotations:
+                continue
+
+            # Si tenemos proyecto, recuperar todos
+            if task.project_id:
+                task.project_id.sudo().write({
+                    "serviflow_sale_order_ids": [
+                        (6, 0, quotations.ids)
+                    ],
+                })
+
+            # Compatibilidad antigua
+            task.sudo().write({
+                "sale_order_id": quotations[0].id,
+            })
 
         return True
 

@@ -100,10 +100,10 @@ class ServiflowRequestBudgetWizard(models.TransientModel):
             )
 
         # Proyecto deliberadamente minimo: nombre, estado y sin gerente.
-        project = self.env['project.project'].sudo().create({
-            'name': lead.name,
-            'project_status': pending_status.id,
-            'user_id': False,
+        project = self.env["project.project"].sudo().create({
+            "name": lead.name,
+            "project_status": pending_status.id,
+            "serviflow_opportunity_id": lead.id,
         })
 
         # Tarea inicial deliberadamente minima. Se asigna cuando un tecnico acepta.

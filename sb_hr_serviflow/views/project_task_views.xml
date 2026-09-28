@@ -12,25 +12,38 @@
             <!-- Campos técnicos -->
             <xpath expr="//sheet" position="inside">
                 <field name="is_serviflow_budget_task" invisible="1"/>
-                <field name="serviflow_sale_order_id" invisible="1"/>
+                <field name="serviflow_opportunity_id" invisible="1"/>
+                <field name="serviflow_sale_order_count" invisible="1"/>
             </xpath>
 
-            <!-- Crear presupuesto -->
+            <!-- Botones -->
             <xpath expr="//header" position="inside">
 
-                <button name="action_serviflow_quotation"
+                <button name="action_serviflow_create_quotation"
                         string="Crear presupuesto"
                         type="object"
                         class="btn-primary"
-                        icon="fa-file-text-o"
-                        invisible="not is_serviflow_budget_task or serviflow_sale_order_id"/>
+                        icon="fa-plus"
+                        invisible="not is_serviflow_budget_task"/>
 
-                <button name="action_serviflow_quotation"
-                        string="Abrir presupuesto"
+                <button name="action_serviflow_open_quotations"
+                        string="Abrir presupuestos"
                         type="object"
                         class="btn-secondary"
-                        icon="fa-external-link"
-                        invisible="not is_serviflow_budget_task or not serviflow_sale_order_id"/>
+                        icon="fa-folder-open"
+                        invisible="not is_serviflow_budget_task or serviflow_sale_order_count == 0"/>
+
+            </xpath>
+
+            <!-- Selector múltiple -->
+            <xpath expr="//field[@name='user_ids']" position="after">
+
+                <field name="serviflow_sale_order_ids"
+                       string="Presupuestos asociados"
+                       widget="many2many_tags"
+                       domain="[('opportunity_id', '=', serviflow_opportunity_id)]"
+                       options="{'no_create': True, 'no_create_edit': True}"
+                       invisible="not is_serviflow_budget_task"/>
 
             </xpath>
 
