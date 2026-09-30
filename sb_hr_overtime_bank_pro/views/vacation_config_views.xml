@@ -1,11 +1,14 @@
 <odoo>
 
-    <record id="view_hr_vacation_config_form" model="ir.ui.view">
+    <record id="view_hr_vacation_config_form"
+            model="ir.ui.view">
+
         <field name="name">hr.vacation.config.form</field>
         <field name="model">hr.vacation.config</field>
+
         <field name="arch" type="xml">
 
-            <form string="Configuración de vacaciones">
+            <form string="Configuración de vacaciones y descansos">
 
                 <sheet>
 
@@ -15,29 +18,48 @@
                                readonly="1"/>
 
                         <field name="leave_type_ids"
-                               string="Tipos de ausencia afectados"
+                               string="Tipos de vacaciones afectados"
                                widget="many2many_tags"
                                options="{'no_create': True, 'no_create_edit': True}"/>
 
                         <field name="compensation_leave_type_id"
-                               string="Tipo de ausencia para compensaciones"
+                               string="Tipo para descanso por horas extra"
                                options="{'no_create': True, 'no_create_edit': True}"/>
 
                     </group>
+
+                    <div class="alert alert-info"
+                         role="alert">
+
+                        <strong>Importante:</strong>
+
+                        el tipo usado para descanso por horas extra
+                        no debe requerir asignación ni utilizar la
+                        deducción nativa de horas extra de Odoo.
+
+                        El saldo válido será únicamente el de
+                        Overtime Bank.
+
+                    </div>
 
                 </sheet>
 
             </form>
 
         </field>
+
     </record>
 
 
     <record id="action_hr_vacation_config"
             model="ir.actions.act_window">
 
-        <field name="name">Configuración vacaciones</field>
+        <field name="name">
+            Configuración vacaciones y descansos
+        </field>
+
         <field name="res_model">hr.vacation.config</field>
+
         <field name="view_mode">form</field>
 
         <field name="res_id"
@@ -49,7 +71,7 @@
 
 
     <menuitem id="menu_hr_vacation_config"
-              name="Configuración vacaciones"
+              name="Configuración vacaciones y descansos"
               parent="menu_overtime_root"
               action="action_hr_vacation_config"
               sequence="30"/>
