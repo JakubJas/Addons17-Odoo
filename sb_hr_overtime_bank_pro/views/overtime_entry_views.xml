@@ -312,11 +312,7 @@
                        string="Fecha"/>
 
                 <field name="compensation_date"
-                       string="Fecha de disfrute"
-                       invisible="type != 'compensation'"
-                       readonly="state == 'done'"
-                       required="type == 'compensation' and state == 'draft'"/>
-
+                       string="Fecha de disfrute"/>
 
                 <!-- ESTADOS -->
 
