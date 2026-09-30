@@ -678,11 +678,11 @@ class HrAttendance(models.Model):
             ),
         ])
 
-        if automatic_entries:
-            automatic_entries.with_context(
-                skip_overtime_limit=True,
-                skip_comp_sync=True,
-            ).unlink()
+        automatic_entries.with_context(
+            skip_overtime_limit=True,
+            skip_comp_sync=True,
+            skip_overtime_log=True,
+        ).unlink()
 
         start_dt, _end_dt = self._get_utc_day_range(
             employee,

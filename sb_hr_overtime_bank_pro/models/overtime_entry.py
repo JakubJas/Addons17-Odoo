@@ -294,6 +294,35 @@ class HrOvertimeEntry(models.Model):
     # =========================================================
     # CREATE
     # =========================================================
+    
+    def _format_hours_for_message(self, hours):
+        """
+        Convierte horas decimales en texto HH:MM para chatter.
+
+        Ejemplos:
+        1.5   -> 01:30
+        0.5   -> 00:30
+        -0.25 -> -00:15
+        """
+
+        hours = hours or 0.0
+
+        sign = "-" if hours < 0 else ""
+
+        total_minutes = int(
+            round(
+                abs(hours) * 60
+            )
+        )
+
+        hour_value = total_minutes // 60
+        minute_value = total_minutes % 60
+
+        return (
+            f"{sign}"
+            f"{hour_value:02d}:"
+            f"{minute_value:02d}"
+        )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -426,10 +455,16 @@ class HrOvertimeEntry(models.Model):
                 rec.type,
             )
 
+            formatted_hours = (
+                rec._format_hours_for_message(
+                    rec.hours
+                )
+            )
+
             rec.employee_id.message_post(
                 body=(
                     f"Registro creado: "
-                    f"{rec.hours} horas "
+                    f"{formatted_hours} "
                     f"({type_label})"
                 ),
                 subtype_xmlid="mail.mt_note",
@@ -610,10 +645,26 @@ class HrOvertimeEntry(models.Model):
             changes = []
 
             if "hours" in vals:
+
+                old_hours = (
+                    rec._format_hours_for_message(
+                        old.get(
+                            "hours",
+                            0.0,
+                        )
+                    )
+                )
+
+                new_hours = (
+                    rec._format_hours_for_message(
+                        rec.hours
+                    )
+                )
+
                 changes.append(
                     f"Horas: "
-                    f"{old.get('hours', 0.0)} "
-                    f"→ {rec.hours}"
+                    f"{old_hours} "
+                    f"→ {new_hours}"
                 )
 
             if "type" in vals:
@@ -735,10 +786,16 @@ class HrOvertimeEntry(models.Model):
                 rec.type,
             )
 
+            formatted_hours = (
+                rec._format_hours_for_message(
+                    rec.hours
+                )
+            )
+
             rec.message_post(
                 body=(
                     f"Registro confirmado: "
-                    f"{rec.hours} horas "
+                    f"{formatted_hours} "
                     f"({type_label})"
                 )
             )
@@ -1204,13 +1261,23 @@ class HrOvertimeEntry(models.Model):
                 rec.type,
             )
 
-            rec.employee_id.message_post(
-                body=(
-                    f"Overtime eliminado: "
-                    f"{rec.hours}h "
-                    f"({type_label})"
+            if not self.env.context.get(
+                "skip_overtime_log"
+            ):
+
+                formatted_hours = (
+                    rec._format_hours_for_message(
+                        rec.hours
+                    )
                 )
-            )
+
+                rec.employee_id.message_post(
+                    body=(
+                        f"Overtime eliminado: "
+                        f"{formatted_hours} "
+                        f"({type_label})"
+                    )
+                )
 
             # -------------------------------------------------
             # Ausencia del sistema nuevo
