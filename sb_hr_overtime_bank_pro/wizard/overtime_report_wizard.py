@@ -102,7 +102,7 @@ class OvertimeReportWizard(models.TransientModel):
         for employee, vals in data.items():
             sheet.write(row, 0, employee, combo_format)
             sheet.write(row, 1, vals['dni'], combo_format)
-            sheet.write(row, 2, vals['hours'], combo_format)
+            sheet.write(row, 2, self._format_hours(abs(vals['hours'])), combo_format)
             row += 1
 
         # FOOTER
@@ -881,148 +881,306 @@ class OvertimeReportWizard(models.TransientModel):
             'target': 'self',
         }
         
-    def _get_expected_hours(self, employee, date):
-        calendar = employee.resource_calendar_id
+    def _get_employee_timezone(self, employee):
+        timezone_name = (
+            employee.resource_calendar_id.tz
+            if employee.resource_calendar_id and employee.resource_calendar_id.tz
+            else self.env.user.tz or "UTC"
+        )
+        return pytz.timezone(timezone_name)
 
-        if not calendar or not employee.resource_id:
-            return 0.0
+    def _get_utc_day_range(self, employee, day):
+        timezone = self._get_employee_timezone(employee)
 
-        tz = pytz.timezone(self.env.user.tz or 'UTC')
-
-        start = tz.localize(datetime.combine(date, time.min))
-        end = tz.localize(datetime.combine(date, time.max))
-
-        intervals = calendar._work_intervals_batch(
-            start, end, resources=employee.resource_id
+        local_start = timezone.localize(
+            datetime.combine(day, time.min)
+        )
+        local_end = timezone.localize(
+            datetime.combine(day + timedelta(days=1), time.min)
         )
 
-        total = 0.0
-        for interval in intervals.get(employee.resource_id.id, []):
-            duration = (interval[1] - interval[0]).total_seconds() / 3600
-            total += duration
+        utc_start = local_start.astimezone(pytz.UTC).replace(tzinfo=None)
+        utc_end = local_end.astimezone(pytz.UTC).replace(tzinfo=None)
 
-        return total
+        return utc_start, utc_end
+
+    def _get_expected_hours(self, employee, day):
+        """Horas previstas del día usando el mismo motor que Asistencias."""
+        return self.env["hr.attendance"]._get_expected_hours_for_day(
+            employee,
+            day,
+        )
+
+    def _get_worked_hours(self, employee, day):
+        """Horas fichadas del día respetando la zona horaria del empleado."""
+        return self.env["hr.attendance"]._get_worked_hours_for_day(
+            employee,
+            day,
+        )
+
+    def _get_attendance_summary(self, employee):
+        """
+        Resumen del periodo.
+
+        Las horas extra, salidas, pagos, descansos y ajustes se leen de
+        hr.overtime.entry. No se recalculan en el Excel, por lo que el resumen
+        coincide con Overtime Bank y respeta cálculo diario/semanal flexible.
+        """
+        OvertimeEntry = self.env["hr.overtime.entry"]
+        Attendance = self.env["hr.attendance"]
+
+        entries = OvertimeEntry.search([
+            ("employee_id", "=", employee.id),
+            ("date", ">=", self.date_from),
+            ("date", "<=", self.date_to),
+            ("state", "=", "done"),
+        ])
+
+        accumulated_entries = OvertimeEntry.search([
+            ("employee_id", "=", employee.id),
+            ("date", "<=", self.date_to),
+            ("state", "=", "done"),
+        ])
+
+        worked = 0.0
+        expected = 0.0
+        current = self.date_from
+
+        while current <= self.date_to:
+            worked += Attendance._get_worked_hours_for_day(employee, current)
+            expected += Attendance._get_expected_hours_for_day(employee, current)
+            current += timedelta(days=1)
+
+        def signed_for(entry_type):
+            return sum(
+                entry._get_signed_hours()
+                for entry in entries
+                if entry.type == entry_type
+            )
+
+        return {
+            "worked": worked,
+            "expected": expected,
+            "extra": max(signed_for("extra"), 0.0),
+            "early_exit": abs(signed_for("early_exit")),
+            "payment": abs(signed_for("payment")),
+            "compensation": abs(signed_for("compensation")),
+            "adjustment": signed_for("adjustment"),
+            "period_balance": sum(
+                entry._get_signed_hours() for entry in entries
+            ),
+            "balance": sum(
+                entry._get_signed_hours()
+                for entry in accumulated_entries
+            ),
+        }
 
     def action_export_attendance_excel(self):
+        self.ensure_one()
 
-        employees = self.env['hr.employee'].search([])
+        employees = self.env["hr.employee"].search([], order="name asc")
+        Attendance = self.env["hr.attendance"]
+        Leave = self.env["hr.leave"]
 
         output = BytesIO()
         workbook = xlsxwriter.Workbook(output)
-        sheet = workbook.add_worksheet('Asistencia')
+        sheet = workbook.add_worksheet("Asistencia")
 
-        header = workbook.add_format({'bold': True, 'border': 1, 'align': 'center'})
-        normal = workbook.add_format()
-        bold_center = workbook.add_format({'bold': True, 'align': 'center'})
-        footer_format = workbook.add_format({'italic': True, 'align': 'center'})
-        
-        green = workbook.add_format({'bg_color': '#C6EFCE', 'border': 1, 'align': 'center'})
-        yellow = workbook.add_format({'bg_color': '#FFEB9C', 'border': 1, 'align': 'center'})
-        red = workbook.add_format({'bg_color': '#FFC7CE', 'border': 1, 'align': 'center'})
-        grey = workbook.add_format({'bg_color': '#D9D9D9', 'border': 1, 'align': 'center'})
+        header = workbook.add_format({
+            "bold": True,
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter",
+            "bg_color": "#D9EAD3",
+        })
+        normal = workbook.add_format({"valign": "vcenter"})
+        footer_format = workbook.add_format({
+            "italic": True,
+            "align": "center",
+        })
+        title_format = workbook.add_format({
+            "bold": True,
+            "font_size": 16,
+            "align": "center",
+        })
+        subtitle_format = workbook.add_format({
+            "bold": True,
+            "align": "left",
+        })
+        summary_title = workbook.add_format({
+            "bold": True,
+            "font_size": 13,
+            "align": "left",
+            "bg_color": "#D9EAD3",
+        })
+        summary_cell = workbook.add_format({
+            "border": 1,
+            "align": "center",
+        })
+        green = workbook.add_format({
+            "bg_color": "#C6EFCE",
+            "border": 1,
+            "align": "center",
+        })
+        yellow = workbook.add_format({
+            "bg_color": "#FFEB9C",
+            "border": 1,
+            "align": "center",
+        })
+        red = workbook.add_format({
+            "bg_color": "#FFC7CE",
+            "border": 1,
+            "align": "center",
+        })
+        grey = workbook.add_format({
+            "bg_color": "#D9D9D9",
+            "border": 1,
+            "align": "center",
+        })
 
-        title_format = workbook.add_format({'bold': True, 'font_size': 16, 'align': 'center'})
-        subtitle_format = workbook.add_format({'bold': True, 'align': 'left'})
-
-        sheet.set_column(0, 0, 30)
-        sheet.set_column(1, 100, 10)
-        sheet.freeze_panes(3, 1)
+        # ---------------------------------------------------------
+        # RESUMEN POR EMPLEADO
+        # ---------------------------------------------------------
+        sheet.set_column("A:A", 30)
+        sheet.set_column("B:I", 18)
 
         sheet.merge_range(
-            0, 0, 0, 6,
-            f'Reporte de Asistencia ({self.date_from} - {self.date_to})',
-            title_format
+            0, 0, 0, 8,
+            f"Reporte de Asistencia ({self.date_from.strftime('%d/%m/%Y')} - {self.date_to.strftime('%d/%m/%Y')})",
+            title_format,
         )
 
-        sheet.write(1, 0, 'Leyenda:', subtitle_format)
-        sheet.write(1, 1, 'Correcto', green)
-        sheet.write(1, 2, 'Incompleto', yellow)
-        sheet.write(1, 3, 'No fichó', red)
-        sheet.write(1, 4, 'Vacaciones', grey)
+        sheet.merge_range(2, 0, 2, 8, "Resumen por empleado", summary_title)
 
-        start_row = 3
-        sheet.write(start_row, 0, 'Empleado', header)
+        summary_headers = [
+            "Empleado",
+            "Horas trabajadas",
+            "Horas previstas",
+            "Horas extra generadas",
+            "Salidas tempranas",
+            "Pagadas en nómina",
+            "Descansos compensados",
+            "Ajustes",
+            "Saldo Overtime",
+        ]
 
-        col = 1
+        for col, label in enumerate(summary_headers):
+            sheet.write(3, col, label, header)
+
+        summary_row = 4
+        for employee in employees:
+            values = self._get_attendance_summary(employee)
+
+            sheet.write(summary_row, 0, employee.name or "", summary_cell)
+            sheet.write(summary_row, 1, self._format_hours(values["worked"]), summary_cell)
+            sheet.write(summary_row, 2, self._format_hours(values["expected"]), summary_cell)
+            sheet.write(summary_row, 3, self._format_hours(values["extra"]), summary_cell)
+            sheet.write(summary_row, 4, self._format_hours(values["early_exit"]), summary_cell)
+            sheet.write(summary_row, 5, self._format_hours(values["payment"]), summary_cell)
+            sheet.write(summary_row, 6, self._format_hours(values["compensation"]), summary_cell)
+            sheet.write(summary_row, 7, self._format_hours(values["adjustment"]), summary_cell)
+            sheet.write(summary_row, 8, self._format_hours(values["balance"]), summary_cell)
+            summary_row += 1
+
+        # ---------------------------------------------------------
+        # DETALLE DIARIO
+        # ---------------------------------------------------------
+        detail_title_row = summary_row + 2
+        sheet.merge_range(
+            detail_title_row, 0, detail_title_row, 8,
+            "Detalle diario de asistencia",
+            summary_title,
+        )
+
+        legend_row = detail_title_row + 1
+        sheet.write(legend_row, 0, "Leyenda:", subtitle_format)
+        sheet.write(legend_row, 1, "Correcto", green)
+        sheet.write(legend_row, 2, "Incompleto", yellow)
+        sheet.write(legend_row, 3, "No fichó", red)
+        sheet.write(legend_row, 4, "Ausencia", grey)
+
+        start_row = detail_title_row + 3
+        sheet.write(start_row, 0, "Empleado", header)
+
         dates = []
         current_date = self.date_from
+        col = 1
 
         while current_date <= self.date_to:
-            sheet.write(start_row, col, current_date.strftime('%d/%m'), header)
+            sheet.write(start_row, col, current_date.strftime("%d/%m"), header)
             dates.append(current_date)
-            col += 1
             current_date += timedelta(days=1)
+            col += 1
+
+        # Las columnas del detalle pueden superar I.
+        sheet.set_column(1, max(1, len(dates)), 10)
+        sheet.freeze_panes(start_row + 1, 1)
 
         row = start_row + 1
 
         for employee in employees:
-
-            sheet.write(row, 0, employee.name or '', normal)
+            sheet.write(row, 0, employee.name or "", normal)
 
             col = 1
+            for day in dates:
+                worked_hours = Attendance._get_worked_hours_for_day(
+                    employee,
+                    day,
+                )
+                expected_hours = Attendance._get_expected_hours_for_day(
+                    employee,
+                    day,
+                )
 
-            for date in dates:
-
-                # HORAS TRABAJADAS
-                attendances = self.env['hr.attendance'].search([
-                    ('employee_id', '=', employee.id),
-                    ('check_in', '>=', str(date) + ' 00:00:00'),
-                    ('check_in', '<=', str(date) + ' 23:59:59'),
-                ])
-
-                worked_hours = sum(attendances.mapped('worked_hours'))
-
-                # HORAS ESPERADAS
-                expected_hours = self._get_expected_hours(employee, date)
-
-                # VACACIONES
-                leave = self.env['hr.leave'].search([
-                    ('employee_id', '=', employee.id),
-                    ('state', '=', 'validate'),
-                    ('request_date_from', '<=', date),
-                    ('request_date_to', '>=', date),
+                leave = Leave.search([
+                    ("employee_id", "=", employee.id),
+                    ("state", "=", "validate"),
+                    ("request_date_from", "<=", day),
+                    ("request_date_to", ">=", day),
                 ], limit=1)
 
-                # LÓGICA COLORES
                 if leave:
                     fmt = grey
-                    value = 'V'
-
+                    value = "V"
                 elif expected_hours == 0:
                     fmt = grey
-                    value = ''
-
+                    value = self._format_hours(worked_hours) if worked_hours else ""
                 elif worked_hours == 0:
                     fmt = red
-                    value = 0
-
-                elif worked_hours < expected_hours:
+                    value = "00:00"
+                elif worked_hours + 0.0001 < expected_hours:
                     fmt = yellow
-                    value = round(worked_hours, 2)
-
+                    value = self._format_hours(worked_hours)
                 else:
                     fmt = green
-                    value = round(worked_hours, 2)
+                    value = self._format_hours(worked_hours)
 
                 sheet.write(row, col, value, fmt)
                 col += 1
 
             row += 1
 
-        sheet.merge_range(row + 2, 0, row + 2, 6, f'Creado por Overtime Bank Pro - Servi Byte Canarias SL - {datetime.now().year}', footer_format)
+        footer_row = row + 2
+        footer_end_col = max(8, len(dates))
+        sheet.merge_range(
+            footer_row, 0, footer_row, footer_end_col,
+            f"Creado por Overtime Bank Pro - Servi Byte Canarias SL - {datetime.now().year}",
+            footer_format,
+        )
 
         workbook.close()
         output.seek(0)
 
-        attachment = self.env['ir.attachment'].create({
-            'name': 'reporte_asistencia.xlsx',
-            'type': 'binary',
-            'datas': base64.b64encode(output.read()),
-            'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        attachment = self.env["ir.attachment"].create({
+            "name": "reporte_asistencia.xlsx",
+            "type": "binary",
+            "datas": base64.b64encode(output.read()),
+            "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         })
 
         return {
-            'type': 'ir.actions.act_url',
-            'url': f'/web/content/{attachment.id}?download=true',
-            'target': 'self',
+            "type": "ir.actions.act_url",
+            "url": f"/web/content/{attachment.id}?download=true",
+            "target": "self",
         }
+
