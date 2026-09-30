@@ -1,28 +1,38 @@
 <odoo>
 
+    <!-- ===================================================== -->
+    <!-- TREE                                                  -->
+    <!-- ===================================================== -->
+
     <record id="view_hr_overtime_entry_tree" model="ir.ui.view">
         <field name="name">hr.overtime.entry.tree</field>
         <field name="model">hr.overtime.entry</field>
+
         <field name="arch" type="xml">
+
             <tree string="Overtime Entries">
 
-                <field name="employee_id" string="Empleado"/>
+                <field name="employee_id"
+                       string="Empleado"/>
 
-                <field name="date" string="Fecha"/>
+                <field name="date"
+                       string="Fecha"/>
 
-                <field name="type" string="Tipo"/>
+                <field name="type"
+                       string="Tipo"/>
 
                 <field name="signed_hours"
                        string="Horas"
                        widget="float_time"
                        sum="Total"/>
 
-                <field name="state" string="Estado"/>
+                <field name="state"
+                       string="Estado"/>
 
                 <field name="description"
                        string="Descripción"/>
 
-                <!-- Campos opcionales de auditoría -->
+                <!-- Auditoría -->
                 <field name="expected_hours"
                        string="Previstas"
                        widget="float_time"
@@ -38,9 +48,20 @@
                        widget="float_time"
                        optional="show"/>
 
+                <!-- Compensación -->
+                <field name="compensation_date"
+                       string="Fecha disfrute"
+                       optional="hide"/>
+
             </tree>
+
         </field>
     </record>
+
+
+    <!-- ===================================================== -->
+    <!-- FORM                                                  -->
+    <!-- ===================================================== -->
 
     <record id="view_hr_overtime_entry_form" model="ir.ui.view">
         <field name="name">hr.overtime.entry.form</field>
@@ -49,6 +70,10 @@
         <field name="arch" type="xml">
 
             <form string="Overtime Entry">
+
+                <!-- ================================================= -->
+                <!-- HEADER                                            -->
+                <!-- ================================================= -->
 
                 <header>
 
@@ -71,6 +96,10 @@
 
 
                 <sheet>
+
+                    <!-- ================================================= -->
+                    <!-- DATOS PRINCIPALES                                 -->
+                    <!-- ================================================= -->
 
                     <group>
 
@@ -108,13 +137,40 @@
                                    string="Fecha"
                                    readonly="state == 'done'"/>
 
+                            <!--
+                                Solo aparece para:
+                                Compensar horas extras
+                            -->
+                            <field name="compensation_date"
+                                   string="Fecha de disfrute"
+                                   invisible="type != 'compensation'"
+                                   readonly="state == 'done'"
+                                   required="type == 'compensation'"/>
+
                         </group>
 
                     </group>
 
-                    <field name="attendance_id" invisible="1"/>
 
-                    <field name="leave_allocation_id" invisible="1"/>
+                    <!-- ================================================= -->
+                    <!-- CAMPOS TÉCNICOS                                   -->
+                    <!-- ================================================= -->
+
+                    <field name="attendance_id"
+                           invisible="1"/>
+
+                    <!-- Histórico / compatibilidad -->
+                    <field name="leave_allocation_id"
+                           invisible="1"/>
+
+                    <!-- Nueva ausencia creada por compensación -->
+                    <field name="compensation_leave_id"
+                           invisible="1"/>
+
+
+                    <!-- ================================================= -->
+                    <!-- CÁLCULO AUTOMÁTICO                                -->
+                    <!-- ================================================= -->
 
                     <group string="CÁLCULO AUTOMÁTICO"
                            invisible="reference not in ('Attendance overtime', 'Attendance overtime day', 'Attendance overtime week')">
@@ -144,36 +200,46 @@
 
                     </group>
 
+
+                    <!-- ================================================= -->
+                    <!-- DETALLE SEMANAL                                   -->
+                    <!-- ================================================= -->
+
                     <separator string="DETALLE SEMANAL"
-                            invisible="reference != 'Attendance overtime week'"/>
+                               invisible="reference != 'Attendance overtime week'"/>
 
                     <field name="attendance_ids"
-                        nolabel="1"
-                        readonly="1"
-                        invisible="reference != 'Attendance overtime week'">
+                           nolabel="1"
+                           readonly="1"
+                           invisible="reference != 'Attendance overtime week'">
 
                         <tree create="0"
-                            edit="0"
-                            delete="0"
-                            default_order="check_in asc">
+                              edit="0"
+                              delete="0"
+                              default_order="check_in asc">
 
                             <field name="attendance_local_date"
-                                string="Fecha"/>
+                                   string="Fecha"/>
 
                             <field name="attendance_local_check_in"
-                                string="Entrada"/>
+                                   string="Entrada"/>
 
                             <field name="attendance_local_check_out"
-                                string="Salida"/>
+                                   string="Salida"/>
 
                             <field name="worked_hours"
-                                string="Horas trabajadas"
-                                widget="float_time"
-                                sum="Total trabajado"/>
+                                   string="Horas trabajadas"
+                                   widget="float_time"
+                                   sum="Total trabajado"/>
 
                         </tree>
 
                     </field>
+
+
+                    <!-- ================================================= -->
+                    <!-- INFORMACIÓN                                       -->
+                    <!-- ================================================= -->
 
                     <group string="INFORMACIÓN">
 
@@ -186,6 +252,11 @@
                                readonly="state == 'done'"/>
 
                     </group>
+
+
+                    <!-- ================================================= -->
+                    <!-- ADJUNTO                                           -->
+                    <!-- ================================================= -->
 
                     <group string="ADJUNTO">
 
@@ -200,6 +271,11 @@
                     </group>
 
                 </sheet>
+
+
+                <!-- ================================================= -->
+                <!-- CHATTER                                           -->
+                <!-- ================================================= -->
 
                 <div class="oe_chatter">
 
@@ -216,6 +292,11 @@
         </field>
     </record>
 
+
+    <!-- ===================================================== -->
+    <!-- SEARCH                                                -->
+    <!-- ===================================================== -->
+
     <record id="view_hr_overtime_entry_search" model="ir.ui.view">
         <field name="name">hr.overtime.entry.search</field>
         <field name="model">hr.overtime.entry</field>
@@ -230,6 +311,9 @@
                 <field name="date"
                        string="Fecha"/>
 
+                <field name="compensation_date"
+                       string="Fecha disfrute"/>
+
 
                 <!-- ESTADOS -->
 
@@ -242,9 +326,25 @@
                         domain="[('state','=','draft')]"/>
 
 
+                <!-- TIPOS -->
+
+                <filter name="extra"
+                        string="Horas extra"
+                        domain="[('type','=','extra')]"/>
+
+                <filter name="payment"
+                        string="Pagadas"
+                        domain="[('type','=','payment')]"/>
+
+                <filter name="compensation"
+                        string="Compensadas"
+                        domain="[('type','=','compensation')]"/>
+
+
                 <!-- AGRUPACIONES -->
 
-                <group expand="0" string="Group By">
+                <group expand="0"
+                       string="Group By">
 
                     <filter name="group_employee"
                             string="Empleado"
@@ -265,19 +365,59 @@
         </field>
     </record>
 
-    <record id="action_overtime_entries" model="ir.actions.act_window">
-        <field name="name">Overtime Entries</field>
-        <field name="res_model">hr.overtime.entry</field>
-        <field name="view_mode">tree,form</field>
-        <field name="search_view_id" ref="view_hr_overtime_entry_search"/>
-        <field name="context">{'group_by': 'employee_id'}</field>
+
+    <!-- ===================================================== -->
+    <!-- ACTION LIST                                           -->
+    <!-- ===================================================== -->
+
+    <record id="action_overtime_entries"
+            model="ir.actions.act_window">
+
+        <field name="name">
+            Overtime Entries
+        </field>
+
+        <field name="res_model">
+            hr.overtime.entry
+        </field>
+
+        <field name="view_mode">
+            tree,form
+        </field>
+
+        <field name="search_view_id"
+               ref="view_hr_overtime_entry_search"/>
+
+        <field name="context">
+            {'group_by': 'employee_id'}
+        </field>
+
     </record>
 
-    <record id="action_create_overtime_entry" model="ir.actions.act_window">
-        <field name="name">Nuevo registro de horas extra</field>
-        <field name="res_model">hr.overtime.entry</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
+
+    <!-- ===================================================== -->
+    <!-- ACTION NUEVO                                          -->
+    <!-- ===================================================== -->
+
+    <record id="action_create_overtime_entry"
+            model="ir.actions.act_window">
+
+        <field name="name">
+            Nuevo registro de horas extra
+        </field>
+
+        <field name="res_model">
+            hr.overtime.entry
+        </field>
+
+        <field name="view_mode">
+            form
+        </field>
+
+        <field name="target">
+            new
+        </field>
+
     </record>
 
 </odoo>

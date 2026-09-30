@@ -17,8 +17,13 @@ class HrVacationConfig(models.Model):
         column1="config_id",
         column2="leave_type_id",
         string="Tipos de ausencia",
+    )
+
+    compensation_leave_type_id = fields.Many2one(
+        "hr.leave.type",
+        string="Tipo de ausencia para compensaciones",
         help=(
-            "Tipos de ausencia a los que se aplicará el cálculo "
-            "personalizado de días de vacaciones."
+            "Tipo de ausencia que se utilizará cuando un empleado "
+            "disfrute horas del banco como día libre."
         ),
     )
