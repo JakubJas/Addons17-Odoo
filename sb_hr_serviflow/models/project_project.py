@@ -86,44 +86,22 @@ class ProjectProject(models.Model):
     def _serviflow_check_tasks_completion(self):
         for project in self:
 
-            # Buscar solicitud principal Serviflow
+            # -----------------------------------------------------
+            # Solo proyectos vinculados a Serviflow
+            # -----------------------------------------------------
+
             serviflow_task = self.env["serviflow.task"].sudo().search([
                 ("project_id", "=", project.id),
                 ("task_type", "=", "budget"),
             ], order="create_date desc", limit=1)
 
-            # Proyecto que no pertenece a Serviflow
             if not serviflow_task:
                 continue
 
-            # Todas las tareas activas del proyecto
-            tasks = self.env["project.task"].sudo().search([
-                ("project_id", "=", project.id),
-                ("active", "=", True),
-            ])
+            # -----------------------------------------------------
+            # El proyecto debe estar en estado COMPLETO
+            # -----------------------------------------------------
 
-            if not tasks:
-                continue
-
-            # Todas deben estar realmente en Hecho
-            all_done = all(
-                task.state == "1_done"
-                for task in tasks
-            )
-
-            if not all_done:
-                continue
-
-            # Tiene que existir al menos un presupuesto
-            if not project.serviflow_sale_order_ids:
-                raise UserError(
-                    _(
-                        "No puedes completar el proyecto porque "
-                        "no tiene ningún presupuesto asociado."
-                    )
-                )
-
-            # Estado Completo del proyecto
             complete_status = self.env["project.status"].sudo().search([
                 ("name", "=", "Completo"),
             ], limit=1)
@@ -133,29 +111,89 @@ class ProjectProject(models.Model):
                     _("No se encontró el estado de proyecto 'Completo'.")
                 )
 
-            # Evitar generar revisiones duplicadas
-            if project.project_status == complete_status:
+            if project.project_status != complete_status:
                 continue
 
-            # Proyecto -> Completo
-            project.sudo().write({
-                "project_status": complete_status.id,
-            })
+            # -----------------------------------------------------
+            # Comprobar tareas del proyecto
+            # -----------------------------------------------------
 
-            # Solicitud principal Serviflow -> done
-            serviflow_task.sudo().write({
-                "state": "done",
-                "completed_at": fields.Datetime.now(),
-            })
+            tasks = self.env["project.task"].sudo().search([
+                ("project_id", "=", project.id),
+                ("active", "=", True),
+            ])
 
-            # Crear revisiones
+            if not tasks:
+                continue
+
+            # Todas tienen que estar realmente HECHAS
+            all_done = all(
+                task.state == "1_done"
+                for task in tasks
+            )
+
+            if not all_done:
+                continue
+
+            # -----------------------------------------------------
+            # Debe haber al menos un presupuesto asociado
+            # -----------------------------------------------------
+
+            if not project.serviflow_sale_order_ids:
+                raise UserError(
+                    _(
+                        "El proyecto está completo, pero no tiene "
+                        "ningún presupuesto asociado."
+                    )
+                )
+
+            # -----------------------------------------------------
+            # Evitar una segunda revisión de la misma ronda
+            # -----------------------------------------------------
+
+            pending_reviews = self.env["serviflow.task"].sudo().search_count([
+                ("project_id", "=", project.id),
+                ("task_type", "=", "review"),
+                ("review_result", "=", "pending"),
+                ("state", "=", "pending"),
+            ])
+
+            if pending_reviews:
+                continue
+
+            # -----------------------------------------------------
+            # Cerrar fase técnica Serviflow
+            # -----------------------------------------------------
+
+            if serviflow_task.state != "done":
+                serviflow_task.sudo().write({
+                    "state": "done",
+                    "completed_at": fields.Datetime.now(),
+                })
+
+            # -----------------------------------------------------
+            # Crear ronda de revisión
+            # -----------------------------------------------------
+
             serviflow_task._create_review_tasks()
 
-            # Chatter
+            # -----------------------------------------------------
+            # Trazabilidad
+            # -----------------------------------------------------
+
             project.message_post(
                 body=(
                     "<b>Proyecto enviado a revisión interna.</b><br/>"
-                    "Todas las tareas están completadas y el proyecto "
-                    "ha pasado automáticamente a estado Completo."
+                    "El proyecto está en estado <b>Completo</b> "
+                    "y todas sus tareas están marcadas como "
+                    "<b>Hecho</b>."
                 )
             )
+            
+    def write(self, vals):
+        res = super().write(vals)
+
+        if "project_status" in vals:
+            self._serviflow_check_tasks_completion()
+
+        return res

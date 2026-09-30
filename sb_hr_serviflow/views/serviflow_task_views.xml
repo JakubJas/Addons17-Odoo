@@ -68,7 +68,16 @@
                             <field name="opportunity_id" readonly="1"/>
                             <field name="project_id" readonly="1"/>
                             <field name="project_task_id" readonly="1"/>
-                            <field name="sale_order_id" readonly="1"/>
+                            <field name="sale_order_ids"
+                                string="Presupuestos asociados"
+                                widget="many2many_tags"
+                                readonly="1"/>                        
+                            <button name="action_open_project_quotations"
+                                    string="Abrir presupuestos"
+                                    type="object"
+                                    class="btn-secondary"
+                                    icon="fa-folder-open"
+                                    invisible="not sale_order_ids"/>
                         </group>
 
                         <group>

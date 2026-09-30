@@ -812,3 +812,43 @@ class ServiflowTask(models.Model):
             'target': 'new',
             'context': {'default_task_id': self.id},
         }
+
+    def action_open_project_quotations(self):
+        self.ensure_one()
+
+        quotations = self.sale_order_ids
+
+        if not quotations:
+            raise UserError(
+                _("Este proyecto no tiene presupuestos asociados.")
+            )
+
+        # Solo uno: abrir directamente
+        if len(quotations) == 1:
+            quotation = quotations[0]
+
+            return {
+                "type": "ir.actions.act_window",
+                "name": quotation.name,
+                "res_model": "sale.order",
+                "res_id": quotation.id,
+                "views": [[False, "form"]],
+                "view_mode": "form",
+                "target": "current",
+            }
+
+        # Varios: mostrar listado
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Presupuestos del proyecto",
+            "res_model": "sale.order",
+            "view_mode": "tree,form",
+            "views": [
+                [False, "tree"],
+                [False, "form"],
+            ],
+            "domain": [
+                ("id", "in", quotations.ids),
+            ],
+            "target": "current",
+        }
