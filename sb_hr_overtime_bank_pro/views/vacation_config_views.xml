@@ -1,12 +1,22 @@
 <odoo>
 
+    <!-- ===================================================== -->
+    <!-- CONFIGURACIÓN VACACIONES / DESCANSOS                  -->
+    <!-- ===================================================== -->
+
     <record id="view_hr_vacation_config_form"
             model="ir.ui.view">
 
-        <field name="name">hr.vacation.config.form</field>
-        <field name="model">hr.vacation.config</field>
+        <field name="name">
+            hr.vacation.config.form
+        </field>
 
-        <field name="arch" type="xml">
+        <field name="model">
+            hr.vacation.config
+        </field>
+
+        <field name="arch"
+               type="xml">
 
             <form string="Configuración de vacaciones y descansos">
 
@@ -17,13 +27,20 @@
                         <field name="name"
                                readonly="1"/>
 
+                    </group>
+
+
+                    <!-- ============================================= -->
+                    <!-- VACACIONES                                    -->
+                    <!-- ============================================= -->
+
+                    <separator string="VACACIONES"/>
+
+                    <group>
+
                         <field name="leave_type_ids"
                                string="Tipos de vacaciones afectados"
                                widget="many2many_tags"
-                               options="{'no_create': True, 'no_create_edit': True}"/>
-
-                        <field name="compensation_leave_type_id"
-                               string="Tipo para descanso por horas extra"
                                options="{'no_create': True, 'no_create_edit': True}"/>
 
                     </group>
@@ -31,14 +48,49 @@
                     <div class="alert alert-info"
                          role="alert">
 
+                        Los tipos seleccionados aquí utilizarán
+                        la configuración personalizada de días
+                        del empleado:
+
+                        <strong>
+                            Lunes, Martes, Miércoles, Jueves,
+                            Viernes, Sábado y Domingo.
+                        </strong>
+
+                    </div>
+
+
+                    <!-- ============================================= -->
+                    <!-- OVERTIME / DESCANSOS                          -->
+                    <!-- ============================================= -->
+
+                    <separator string="DESCANSO POR HORAS EXTRA"/>
+
+                    <group>
+
+                        <field name="compensation_leave_type_id"
+                               string="Tipo para descanso por horas extra"
+                               options="{'no_create': True, 'no_create_edit': True}"/>
+
+                    </group>
+
+                    <div class="alert alert-warning"
+                         role="alert">
+
                         <strong>Importante:</strong>
 
-                        el tipo usado para descanso por horas extra
-                        no debe requerir asignación ni utilizar la
-                        deducción nativa de horas extra de Odoo.
+                        este tipo se utilizará únicamente cuando
+                        desde Overtime se seleccione
 
-                        El saldo válido será únicamente el de
-                        Overtime Bank.
+                        <strong>
+                            “Disfrutar horas extra como descanso”.
+                        </strong>
+
+                        No debe requerir asignación previa ni utilizar
+                        la deducción nativa de horas extra de Odoo.
+
+                        El saldo válido será siempre el de
+                        <strong>Overtime Bank</strong>.
 
                     </div>
 
@@ -50,6 +102,10 @@
 
     </record>
 
+
+    <!-- ===================================================== -->
+    <!-- ACCIÓN                                                -->
+    <!-- ===================================================== -->
 
     <record id="action_hr_vacation_config"
             model="ir.actions.act_window">
@@ -69,6 +125,10 @@
 
     </record>
 
+
+    <!-- ===================================================== -->
+    <!-- MENÚ                                                  -->
+    <!-- ===================================================== -->
 
     <menuitem id="menu_hr_vacation_config"
               name="Configuración vacaciones y descansos"

@@ -1,7 +1,7 @@
 <odoo>
 
     <!-- ===================================================== -->
-    <!-- TREE                                                  -->
+    <!-- LISTA                                                 -->
     <!-- ===================================================== -->
 
     <record id="view_hr_overtime_entry_tree" model="ir.ui.view">
@@ -32,7 +32,6 @@
                 <field name="description"
                        string="Descripción"/>
 
-                <!-- Auditoría -->
                 <field name="expected_hours"
                        string="Previstas"
                        widget="float_time"
@@ -48,7 +47,6 @@
                        widget="float_time"
                        optional="show"/>
 
-                <!-- Compensación -->
                 <field name="compensation_date"
                        string="Fecha disfrute"
                        optional="hide"/>
@@ -60,7 +58,7 @@
 
 
     <!-- ===================================================== -->
-    <!-- FORM                                                  -->
+    <!-- FORMULARIO                                            -->
     <!-- ===================================================== -->
 
     <record id="view_hr_overtime_entry_form" model="ir.ui.view">
@@ -70,10 +68,6 @@
         <field name="arch" type="xml">
 
             <form string="Overtime Entry">
-
-                <!-- ================================================= -->
-                <!-- HEADER                                            -->
-                <!-- ================================================= -->
 
                 <header>
 
@@ -97,13 +91,12 @@
 
                 <sheet>
 
-                    <!-- ================================================= -->
-                    <!-- DATOS PRINCIPALES                                 -->
-                    <!-- ================================================= -->
+                    <!-- ============================================= -->
+                    <!-- DATOS PRINCIPALES                             -->
+                    <!-- ============================================= -->
 
                     <group>
 
-                        <!-- COLUMNA IZQUIERDA -->
                         <group>
 
                             <field name="employee_id"
@@ -121,7 +114,6 @@
                         </group>
 
 
-                        <!-- COLUMNA DERECHA -->
                         <group>
 
                             <field name="hours"
@@ -137,40 +129,34 @@
                                    string="Fecha"
                                    readonly="state == 'done'"/>
 
-                            <!--
-                                Solo aparece para:
-                                Compensar horas extras
-                            -->
                             <field name="compensation_date"
                                    string="Fecha de disfrute"
                                    invisible="type != 'compensation'"
                                    readonly="state == 'done'"
-                                   required="type == 'compensation'"/>
+                                   required="type == 'compensation' and state == 'draft'"/>
 
                         </group>
 
                     </group>
 
 
-                    <!-- ================================================= -->
-                    <!-- CAMPOS TÉCNICOS                                   -->
-                    <!-- ================================================= -->
+                    <!-- ============================================= -->
+                    <!-- CAMPOS TÉCNICOS                               -->
+                    <!-- ============================================= -->
 
                     <field name="attendance_id"
                            invisible="1"/>
 
-                    <!-- Histórico / compatibilidad -->
                     <field name="leave_allocation_id"
                            invisible="1"/>
 
-                    <!-- Nueva ausencia creada por compensación -->
                     <field name="compensation_leave_id"
                            invisible="1"/>
 
 
-                    <!-- ================================================= -->
-                    <!-- CÁLCULO AUTOMÁTICO                                -->
-                    <!-- ================================================= -->
+                    <!-- ============================================= -->
+                    <!-- CÁLCULO AUTOMÁTICO                            -->
+                    <!-- ============================================= -->
 
                     <group string="CÁLCULO AUTOMÁTICO"
                            invisible="reference not in ('Attendance overtime', 'Attendance overtime day', 'Attendance overtime week')">
@@ -201,9 +187,9 @@
                     </group>
 
 
-                    <!-- ================================================= -->
-                    <!-- DETALLE SEMANAL                                   -->
-                    <!-- ================================================= -->
+                    <!-- ============================================= -->
+                    <!-- DETALLE SEMANAL                               -->
+                    <!-- ============================================= -->
 
                     <separator string="DETALLE SEMANAL"
                                invisible="reference != 'Attendance overtime week'"/>
@@ -237,9 +223,9 @@
                     </field>
 
 
-                    <!-- ================================================= -->
-                    <!-- INFORMACIÓN                                       -->
-                    <!-- ================================================= -->
+                    <!-- ============================================= -->
+                    <!-- INFORMACIÓN                                   -->
+                    <!-- ============================================= -->
 
                     <group string="INFORMACIÓN">
 
@@ -254,9 +240,9 @@
                     </group>
 
 
-                    <!-- ================================================= -->
-                    <!-- ADJUNTO                                           -->
-                    <!-- ================================================= -->
+                    <!-- ============================================= -->
+                    <!-- ADJUNTO                                       -->
+                    <!-- ============================================= -->
 
                     <group string="ADJUNTO">
 
@@ -272,10 +258,6 @@
 
                 </sheet>
 
-
-                <!-- ================================================= -->
-                <!-- CHATTER                                           -->
-                <!-- ================================================= -->
 
                 <div class="oe_chatter">
 
@@ -294,7 +276,7 @@
 
 
     <!-- ===================================================== -->
-    <!-- SEARCH                                                -->
+    <!-- BÚSQUEDA                                              -->
     <!-- ===================================================== -->
 
     <record id="view_hr_overtime_entry_search" model="ir.ui.view">
@@ -314,36 +296,37 @@
                 <field name="compensation_date"
                        string="Fecha de disfrute"/>
 
+
                 <!-- ESTADOS -->
 
                 <filter name="approved"
-                        string="Aprobado"
+                        string="Confirmado"
                         domain="[('state','=','done')]"/>
 
                 <filter name="pending"
-                        string="Pendiente"
+                        string="Borrador"
                         domain="[('state','=','draft')]"/>
 
 
                 <!-- TIPOS -->
 
                 <filter name="extra"
-                        string="Horas extra"
+                        string="Añadidas al banco"
                         domain="[('type','=','extra')]"/>
 
                 <filter name="payment"
-                        string="Pagadas"
+                        string="Pagadas en nómina"
                         domain="[('type','=','payment')]"/>
 
                 <filter name="compensation"
-                        string="Compensadas"
+                        string="Descanso por horas extra"
                         domain="[('type','=','compensation')]"/>
 
 
                 <!-- AGRUPACIONES -->
 
                 <group expand="0"
-                       string="Group By">
+                       string="Agrupar por">
 
                     <filter name="group_employee"
                             string="Empleado"
@@ -366,27 +349,38 @@
 
 
     <!-- ===================================================== -->
-    <!-- ACTION LIST                                           -->
+    <!-- ACCIÓN PRINCIPAL                                      -->
     <!-- ===================================================== -->
 
-    <record id="action_overtime_entries" model="ir.actions.act_window">
+    <record id="action_overtime_entries"
+            model="ir.actions.act_window">
+
         <field name="name">Overtime Entries</field>
         <field name="res_model">hr.overtime.entry</field>
         <field name="view_mode">tree,form</field>
-        <field name="search_view_id" ref="view_hr_overtime_entry_search"/>
-        <field name="context">{'group_by': 'employee_id'}</field>
+
+        <field name="search_view_id"
+               ref="view_hr_overtime_entry_search"/>
+
+        <field name="context">
+            {'group_by': 'employee_id'}
+        </field>
+
     </record>
 
 
     <!-- ===================================================== -->
-    <!-- ACTION NUEVO                                          -->
+    <!-- NUEVO MOVIMIENTO                                      -->
     <!-- ===================================================== -->
 
-    <record id="action_create_overtime_entry" model="ir.actions.act_window">
+    <record id="action_create_overtime_entry"
+            model="ir.actions.act_window">
+
         <field name="name">Nuevo registro de horas extra</field>
         <field name="res_model">hr.overtime.entry</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
+
     </record>
 
 </odoo>

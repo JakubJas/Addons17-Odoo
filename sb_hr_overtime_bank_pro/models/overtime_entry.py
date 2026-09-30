@@ -1,6 +1,7 @@
-from odoo import models, fields, api
-from odoo.exceptions import UserError
 from datetime import timedelta
+
+from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class HrOvertimeEntry(models.Model):
@@ -13,20 +14,23 @@ class HrOvertimeEntry(models.Model):
     MAX_HOURS = 80
 
     # =========================================================
-    # CAMPOS PRINCIPALES
+    # CAMPOS
     # =========================================================
 
     employee_id = fields.Many2one(
         "hr.employee",
+        string="Empleado",
         required=True,
     )
 
     date = fields.Date(
+        string="Fecha",
         default=fields.Date.today,
         tracking=True,
     )
 
     hours = fields.Float(
+        string="Horas",
         tracking=True,
     )
 
@@ -48,51 +52,75 @@ class HrOvertimeEntry(models.Model):
 
     type = fields.Selection(
         [
-            ("extra", "Añadir horas extra al banco"),
-            ("payment", "Pagar horas extra en nómina"),
-            ("compensation", "Disfrutar horas extra como descanso"),
-            ("early_exit", "Salida temprana"),
-            ("adjustment", "Ajuste manual"),
+            (
+                "extra",
+                "Añadir horas extra al banco",
+            ),
+            (
+                "payment",
+                "Pagar horas extra en nómina",
+            ),
+            (
+                "compensation",
+                "Disfrutar horas extra como descanso",
+            ),
+            (
+                "early_exit",
+                "Salida temprana",
+            ),
+            (
+                "adjustment",
+                "Ajuste manual",
+            ),
         ],
+        string="Tipo",
         required=True,
         tracking=True,
     )
 
     attendance_id = fields.Many2one(
         "hr.attendance",
+        string="Asistencia",
         tracking=True,
     )
 
     reference = fields.Char(
+        string="Referencia",
         tracking=True,
     )
 
-    state = fields.Selection([
-        ("draft", "Borrador"),
-        ("done", "Confirmado"),
-    ], default="draft", tracking=True)
+    state = fields.Selection(
+        [
+            ("draft", "Borrador"),
+            ("done", "Confirmado"),
+        ],
+        string="Estado",
+        default="draft",
+        tracking=True,
+    )
 
     description = fields.Char(
-        "Descripción",
+        string="Descripción",
         tracking=True,
     )
 
     attachment = fields.Binary(
-        "Documento",
+        string="Documento",
     )
 
     attachment_filename = fields.Char(
-        "Nombre del archivo",
+        string="Nombre del archivo",
         tracking=True,
     )
 
     # =========================================================
     # LEGACY
     #
-    # Se mantiene para los registros antiguos que generaban
+    # Los movimientos antiguos de compensación generaban
     # hr.leave.allocation.
     #
-    # Los nuevos registros ya NO crearán asignaciones.
+    # Se conserva para poder limpiar esos registros históricos.
+    # Los movimientos nuevos NO crean asignaciones.
     # =========================================================
 
     leave_allocation_id = fields.Many2one(
@@ -102,14 +130,15 @@ class HrOvertimeEntry(models.Model):
     )
 
     # =========================================================
-    # COMPENSACIÓN DE HORAS
+    # DESCANSO POR HORAS EXTRA
     # =========================================================
 
     compensation_date = fields.Date(
         string="Fecha de disfrute",
+        tracking=True,
         help=(
-            "Fecha en la que el empleado disfrutará las horas "
-            "compensadas como ausencia."
+            "Fecha en la que el empleado disfruta las horas "
+            "acumuladas como descanso."
         ),
     )
 
@@ -121,7 +150,7 @@ class HrOvertimeEntry(models.Model):
     )
 
     # =========================================================
-    # CÁLCULO
+    # AUDITORÍA DEL CÁLCULO
     # =========================================================
 
     signed_hours = fields.Float(
@@ -154,14 +183,10 @@ class HrOvertimeEntry(models.Model):
         store=True,
         readonly=True,
         tracking=True,
-        help=(
-            "Diferencia entre las horas trabajadas "
-            "y las horas previstas."
-        ),
     )
 
     # =========================================================
-    # DETALLE DE ASISTENCIAS SEMANALES
+    # ASISTENCIAS SEMANALES
     # =========================================================
 
     @api.depends(
@@ -189,27 +214,31 @@ class HrOvertimeEntry(models.Model):
                 or "UTC"
             )
 
-            attendances = self.env[
-                "hr.attendance"
-            ].search([
+            attendances = self.env["hr.attendance"].search([
                 (
                     "employee_id",
                     "=",
                     rec.employee_id.id,
                 ),
-                ("check_in", "!=", False),
-                ("check_out", "!=", False),
+                (
+                    "check_in",
+                    "!=",
+                    False,
+                ),
+                (
+                    "check_out",
+                    "!=",
+                    False,
+                ),
             ])
 
-            week_attendances = self.env[
-                "hr.attendance"
-            ]
+            week_attendances = self.env["hr.attendance"]
 
             for attendance in attendances:
                 local_check_in = (
                     fields.Datetime.context_timestamp(
                         attendance.with_context(
-                            tz=timezone_name
+                            tz=timezone_name,
                         ),
                         attendance.check_in,
                     )
@@ -225,7 +254,7 @@ class HrOvertimeEntry(models.Model):
             rec.attendance_ids = week_attendances
 
     # =========================================================
-    # SALDO TOTAL
+    # SALDO
     # =========================================================
 
     def _get_total_balance(self, employee):
@@ -288,16 +317,16 @@ class HrOvertimeEntry(models.Model):
             return records
 
         # -----------------------------------------------------
-        # Validaciones de saldo
+        # Validación previa del saldo
         # -----------------------------------------------------
 
         for vals in vals_list:
+
             new_state = vals.get(
                 "state",
                 "draft",
             )
 
-            # Borrador no afecta al saldo.
             if new_state != "done":
                 continue
 
@@ -319,19 +348,18 @@ class HrOvertimeEntry(models.Model):
 
             new_type = vals.get("type")
 
-            # -------------------------------------------------
-            # Una compensación confirmada debe tener
-            # fecha de disfrute.
-            # -------------------------------------------------
-
+            # Descanso confirmado:
+            # requiere fecha real de disfrute.
             if (
                 new_type == "compensation"
-                and not vals.get("compensation_date")
+                and not vals.get(
+                    "compensation_date"
+                )
             ):
                 raise UserError(
                     "Debes indicar la fecha de disfrute "
-                    "antes de confirmar una compensación "
-                    "de horas extras."
+                    "antes de confirmar un descanso "
+                    "por horas extra."
                 )
 
             simulated_entry = self.new(
@@ -345,7 +373,8 @@ class HrOvertimeEntry(models.Model):
             )
 
             added_hours = (
-                simulated_entry._get_signed_hours()
+                simulated_entry
+                ._get_signed_hours()
             )
 
             future_balance = (
@@ -360,11 +389,9 @@ class HrOvertimeEntry(models.Model):
                     f"horas acumuladas.\n\n"
                     f"Este movimiento modificaría "
                     f"el saldo en "
-                    f"{round(added_hours, 2)} "
-                    f"horas.\n\n"
+                    f"{round(added_hours, 2)} horas.\n\n"
                     f"El saldo final sería "
-                    f"{round(future_balance, 2)} "
-                    f"horas.\n\n"
+                    f"{round(future_balance, 2)} horas.\n\n"
                     f"No puede superar el límite de "
                     f"{self.MAX_HOURS} horas."
                 )
@@ -376,27 +403,19 @@ class HrOvertimeEntry(models.Model):
                     f"horas acumuladas.\n\n"
                     f"Este movimiento modificaría "
                     f"el saldo en "
-                    f"{round(added_hours, 2)} "
-                    f"horas.\n\n"
+                    f"{round(added_hours, 2)} horas.\n\n"
                     f"El saldo final sería "
-                    f"{round(future_balance, 2)} "
-                    f"horas.\n\n"
+                    f"{round(future_balance, 2)} horas.\n\n"
                     f"No puede bajar del límite de "
                     f"{self.MIN_HOURS} horas."
                 )
-
-        # -----------------------------------------------------
-        # Crear
-        # -----------------------------------------------------
 
         records = super().create(
             vals_list
         )
 
         type_labels = dict(
-            self.env[
-                "hr.overtime.entry"
-            ]._fields[
+            self._fields[
                 "type"
             ].selection
         )
@@ -415,10 +434,6 @@ class HrOvertimeEntry(models.Model):
                 ),
                 subtype_xmlid="mail.mt_note",
             )
-
-        # -----------------------------------------------------
-        # Sincronizar ausencia de compensación
-        # -----------------------------------------------------
 
         if not self.env.context.get(
             "skip_comp_sync"
@@ -442,14 +457,22 @@ class HrOvertimeEntry(models.Model):
 
         for rec in self:
             old_values[rec.id] = {
-                "employee_id": rec.employee_id,
+                "employee_id": (
+                    rec.employee_id
+                ),
                 "hours": rec.hours,
                 "type": rec.type,
                 "state": rec.state,
+                "compensation_date": (
+                    rec.compensation_date
+                ),
             }
 
         # -----------------------------------------------------
-        # Validación previa
+        # Validar el estado FUTURO
+        #
+        # Así un histórico confirmado sin fecha puede
+        # volver a borrador.
         # -----------------------------------------------------
 
         for rec in self:
@@ -483,6 +506,8 @@ class HrOvertimeEntry(models.Model):
                 rec.compensation_date,
             )
 
+            # SOLO se exige fecha cuando el estado final
+            # va a quedar Confirmado.
             if (
                 new_type == "compensation"
                 and new_state == "done"
@@ -490,8 +515,8 @@ class HrOvertimeEntry(models.Model):
             ):
                 raise UserError(
                     "Debes indicar la fecha de disfrute "
-                    "antes de confirmar una compensación "
-                    "de horas extras."
+                    "antes de confirmar un descanso "
+                    "por horas extra."
                 )
 
             if (
@@ -522,8 +547,6 @@ class HrOvertimeEntry(models.Model):
 
             previous_effect = 0.0
 
-            # Si el registro ya estaba confirmado
-            # quitamos primero su efecto anterior.
             if (
                 rec.state == "done"
                 and rec.employee_id
@@ -563,27 +586,22 @@ class HrOvertimeEntry(models.Model):
                     f"{self.MIN_HOURS} horas."
                 )
 
-        # -----------------------------------------------------
-        # Escribir
-        # -----------------------------------------------------
-
         result = super().write(
             vals
         )
 
+        # -----------------------------------------------------
+        # CHATTER
+        # -----------------------------------------------------
+
         type_labels = dict(
-            self.env[
-                "hr.overtime.entry"
-            ]._fields[
+            self._fields[
                 "type"
             ].selection
         )
 
-        # -----------------------------------------------------
-        # LOG
-        # -----------------------------------------------------
-
         for rec in self:
+
             old = old_values.get(
                 rec.id,
                 {},
@@ -599,6 +617,7 @@ class HrOvertimeEntry(models.Model):
                 )
 
             if "type" in vals:
+
                 old_type = type_labels.get(
                     old.get("type"),
                     old.get("type"),
@@ -611,8 +630,7 @@ class HrOvertimeEntry(models.Model):
 
                 changes.append(
                     f"Tipo: "
-                    f"{old_type} "
-                    f"→ {new_type}"
+                    f"{old_type} → {new_type}"
                 )
 
             if "state" in vals:
@@ -625,6 +643,8 @@ class HrOvertimeEntry(models.Model):
             if "compensation_date" in vals:
                 changes.append(
                     "Fecha de disfrute: "
+                    f"{old.get('compensation_date') or '-'} "
+                    f"→ "
                     f"{rec.compensation_date or '-'}"
                 )
 
@@ -638,7 +658,7 @@ class HrOvertimeEntry(models.Model):
                 )
 
         # -----------------------------------------------------
-        # SINCRONIZAR AUSENCIA
+        # SINCRONIZAR DESCANSO
         # -----------------------------------------------------
 
         if (
@@ -666,6 +686,7 @@ class HrOvertimeEntry(models.Model):
     # =========================================================
 
     def action_confirm(self):
+
         for rec in self:
 
             if (
@@ -684,17 +705,41 @@ class HrOvertimeEntry(models.Model):
             "state": "done",
         })
 
-        # Seguridad por si quedaba una asignación del sistema viejo.
-        self._cleanup_legacy_compensation_allocation()
+        # Solo las compensaciones pueden tener
+        # asignaciones históricas.
+        compensation_records = self.filtered(
+            lambda rec: (
+                rec.type == "compensation"
+            )
+        )
 
-        # Sistema nuevo.
-        self._sync_compensation_leave()
+        if compensation_records:
+
+            # Elimina únicamente asignaciones antiguas
+            # directamente vinculadas al movimiento.
+            compensation_records\
+                ._cleanup_legacy_compensation_allocation()
+
+            # Genera la ausencia real.
+            compensation_records\
+                ._sync_compensation_leave()
 
         for rec in self:
+
+            type_label = dict(
+                self._fields[
+                    "type"
+                ].selection
+            ).get(
+                rec.type,
+                rec.type,
+            )
+
             rec.message_post(
                 body=(
                     f"Registro confirmado: "
-                    f"{rec.hours} horas ({rec.type})"
+                    f"{rec.hours} horas "
+                    f"({type_label})"
                 )
             )
 
@@ -705,33 +750,46 @@ class HrOvertimeEntry(models.Model):
     # =========================================================
 
     def action_set_to_draft(self):
+        """
+        Payment:
+            Solo deja temporalmente de afectar al banco.
+
+        Compensation:
+            Además elimina la ausencia automática y,
+            si existe, la asignación legacy vinculada.
+        """
+
         self.with_context(
             skip_comp_sync=True
         ).write({
             "state": "draft",
         })
 
-        # Si había una ausencia generada con el sistema nuevo,
-        # desaparece mientras el movimiento está en borrador.
-        self._delete_generated_compensation_leave()
+        compensation_records = self.filtered(
+            lambda rec: (
+                rec.type == "compensation"
+            )
+        )
 
-        # Si era un registro histórico, limpiamos su antigua
-        # asignación automática.
-        self._cleanup_legacy_compensation_allocation()
+        if compensation_records:
+
+            # Al estar en borrador, _sync detecta que
+            # ya no debe existir la ausencia automática.
+            compensation_records\
+                ._sync_compensation_leave()
+
+            # Limpieza del sistema antiguo.
+            compensation_records\
+                ._cleanup_legacy_compensation_allocation()
 
         return True
 
     # =========================================================
-    # TIPO DE AUSENCIA DE COMPENSACIÓN
+    # TIPO DE AUSENCIA DE DESCANSO
     # =========================================================
 
     def _get_compensation_leave_type(self):
-        """
-        Obtiene el tipo de ausencia configurado expresamente
-        para las compensaciones de Overtime.
-
-        Ya no buscamos el primer hr.leave.type disponible.
-        """
+        self.ensure_one()
 
         config = self.env.ref(
             "sb_hr_overtime_bank_pro."
@@ -749,18 +807,17 @@ class HrOvertimeEntry(models.Model):
         )
 
     # =========================================================
-    # VALIDAR AUSENCIA GENERADA
+    # VALIDAR AUSENCIA AUTOMÁTICA
     # =========================================================
 
     def _validate_generated_leave(
         self,
         leave,
     ):
+
         if not leave:
             return
 
-        # Odoo dispone internamente de
-        # _action_validate().
         if hasattr(
             leave,
             "_action_validate",
@@ -768,21 +825,29 @@ class HrOvertimeEntry(models.Model):
             leave._action_validate()
             return
 
-        # Fallback por compatibilidad.
         if (
-            hasattr(leave, "action_confirm")
+            hasattr(
+                leave,
+                "action_confirm",
+            )
             and leave.state == "draft"
         ):
             leave.action_confirm()
 
         if (
-            hasattr(leave, "action_approve")
+            hasattr(
+                leave,
+                "action_approve",
+            )
             and leave.state == "confirm"
         ):
             leave.action_approve()
 
         if (
-            hasattr(leave, "action_validate")
+            hasattr(
+                leave,
+                "action_validate",
+            )
             and leave.state != "validate"
         ):
             leave.action_validate()
@@ -794,7 +859,7 @@ class HrOvertimeEntry(models.Model):
             })
 
     # =========================================================
-    # SINCRONIZAR COMPENSACIÓN → AUSENCIA
+    # DESCANSO → AUSENCIA
     # =========================================================
 
     def _sync_compensation_leave(self):
@@ -806,19 +871,21 @@ class HrOvertimeEntry(models.Model):
         for rec in self:
 
             existing_leave = (
-                rec.compensation_leave_id.sudo()
+                rec.compensation_leave_id
+                .sudo()
             )
 
             needs_leave = (
                 rec.type == "compensation"
                 and rec.state == "done"
                 and rec.employee_id
-                and abs(rec.hours or 0.0) > 0.0
+                and abs(
+                    rec.hours or 0.0
+                ) > 0.0
             )
 
             # -------------------------------------------------
-            # Ya no necesita ausencia:
-            # eliminar únicamente la que generó este registro.
+            # Ya no necesita ausencia
             # -------------------------------------------------
 
             if not needs_leave:
@@ -826,27 +893,43 @@ class HrOvertimeEntry(models.Model):
                 if existing_leave:
 
                     rec.with_context(
-                        skip_comp_sync=True
+                        skip_comp_sync=True,
+                        skip_overtime_limit=True,
                     ).write({
                         "compensation_leave_id": False,
                     })
+
+                    # Intentamos volverla a borrador
+                    # antes de eliminar si está aprobada.
+                    if (
+                        existing_leave.state
+                        == "validate"
+                        and hasattr(
+                            existing_leave,
+                            "action_draft",
+                        )
+                    ):
+                        try:
+                            existing_leave.action_draft()
+                        except Exception:
+                            pass
 
                     existing_leave.unlink()
 
                 continue
 
             # -------------------------------------------------
-            # Fecha obligatoria
+            # Fecha
             # -------------------------------------------------
 
             if not rec.compensation_date:
                 raise UserError(
                     "Debes indicar la fecha de disfrute "
-                    "para la compensación de horas extra."
+                    "para el descanso por horas extra."
                 )
 
             # -------------------------------------------------
-            # Tipo de ausencia configurado
+            # Tipo de ausencia
             # -------------------------------------------------
 
             leave_type = (
@@ -855,20 +938,14 @@ class HrOvertimeEntry(models.Model):
 
             if not leave_type:
                 raise UserError(
-                    "No hay configurado un tipo de "
-                    "ausencia para las compensaciones "
-                    "de horas extra.\n\n"
-                    "Ve a Overtime > "
-                    "Configuración vacaciones y "
-                    "selecciona el tipo correspondiente."
+                    "No hay configurado un tipo de ausencia "
+                    "para los descansos por horas extra.\n\n"
+                    "Ve a Overtime > Configuración vacaciones "
+                    "y descansos."
                 )
 
             # -------------------------------------------------
-            # IMPORTANTE
-            #
-            # El nuevo tipo de ausencia NO debe necesitar
-            # asignaciones, porque el saldo real ya está
-            # gestionado por Overtime Bank.
+            # NO PUEDE REQUERIR ASIGNACIÓN
             # -------------------------------------------------
 
             if (
@@ -879,34 +956,31 @@ class HrOvertimeEntry(models.Model):
             ):
                 raise UserError(
                     "El tipo de ausencia configurado "
-                    "para compensaciones requiere una "
-                    "asignación previa.\n\n"
-                    "Para el nuevo funcionamiento de "
-                    "Overtime debe utilizarse un tipo "
-                    "de ausencia que NO requiera "
-                    "asignación."
+                    "para descanso por horas extra "
+                    "requiere una asignación previa.\n\n"
+                    "Debes configurarlo para que NO "
+                    "requiera asignación."
                 )
-                
+
             # -------------------------------------------------
-            # IMPORTANTE 2
-            #
-            # Tampoco debe utilizar el banco nativo de
-            # horas extra de Odoo.
+            # NO PUEDE USAR EL BANCO NATIVO DE ODOO
             # -------------------------------------------------
 
             if (
-                "overtime_deductible" in leave_type._fields
+                "overtime_deductible"
+                in leave_type._fields
                 and leave_type.overtime_deductible
             ):
                 raise UserError(
-                    "El tipo de ausencia seleccionado tiene activada "
-                    "la deducción nativa de horas extra de Odoo.\n\n"
-                    "Debes desactivarla o seleccionar un tipo específico "
-                    "para Overtime Bank."
+                    "El tipo de ausencia seleccionado tiene "
+                    "activada la deducción nativa de horas "
+                    "extra de Odoo.\n\n"
+                    "Desactívala porque el saldo ya está "
+                    "gestionado por Overtime Bank."
                 )
 
             # -------------------------------------------------
-            # Comprobar que hablamos de un día completo
+            # Por ahora solo día completo
             # -------------------------------------------------
 
             calendar = (
@@ -929,26 +1003,22 @@ class HrOvertimeEntry(models.Model):
                 - hours_per_day
             ) > 0.05:
                 raise UserError(
-                    "La generación automática de "
-                    "ausencias está preparada "
-                    "actualmente para compensaciones "
-                    "de un día completo.\n\n"
-                    f"Horas por día del empleado: "
+                    "La creación automática del descanso "
+                    "está preparada actualmente para "
+                    "compensaciones de un día completo.\n\n"
+                    f"Jornada diaria: "
                     f"{hours_per_day:.2f} h.\n"
                     f"Horas compensadas: "
-                    f"{compensation_hours:.2f} h.\n\n"
-                    "Si necesitas una compensación "
-                    "parcial, registra la ausencia "
-                    "manualmente."
+                    f"{compensation_hours:.2f} h."
                 )
 
             # -------------------------------------------------
-            # Valores de la ausencia
+            # Datos de ausencia
             # -------------------------------------------------
 
             values = {
                 "name": (
-                    "Compensación horas extras - "
+                    "Descanso por horas extra - "
                     f"{rec.employee_id.name or ''}"
                 ),
                 "employee_id": (
@@ -966,14 +1036,11 @@ class HrOvertimeEntry(models.Model):
             }
 
             # -------------------------------------------------
-            # Si ya existe una ausencia generada,
-            # la actualizamos.
+            # Actualizar existente
             # -------------------------------------------------
 
             if existing_leave:
 
-                # Una ausencia validada normalmente
-                # no debe modificarse directamente.
                 if (
                     existing_leave.state
                     == "validate"
@@ -983,17 +1050,21 @@ class HrOvertimeEntry(models.Model):
                         "action_draft",
                     ):
                         existing_leave.action_draft()
+
                     else:
-                        # Si no existe action_draft,
-                        # recreamos la ausencia.
+
                         rec.with_context(
-                            skip_comp_sync=True
+                            skip_comp_sync=True,
+                            skip_overtime_limit=True,
                         ).write({
                             "compensation_leave_id": False,
                         })
 
                         existing_leave.unlink()
-                        existing_leave = False
+
+                        existing_leave = (
+                            self.env["hr.leave"]
+                        )
 
                 if existing_leave:
                     existing_leave.write(
@@ -1001,17 +1072,20 @@ class HrOvertimeEntry(models.Model):
                     )
 
             # -------------------------------------------------
-            # Crear
+            # Crear nueva
             # -------------------------------------------------
 
             if not existing_leave:
 
                 existing_leave = (
-                    Leave.create(values)
+                    Leave.create(
+                        values
+                    )
                 )
 
                 rec.with_context(
-                    skip_comp_sync=True
+                    skip_comp_sync=True,
+                    skip_overtime_limit=True,
                 ).write({
                     "compensation_leave_id": (
                         existing_leave.id
@@ -1019,12 +1093,60 @@ class HrOvertimeEntry(models.Model):
                 })
 
             # -------------------------------------------------
-            # Aprobar directamente
+            # Aprobar
             # -------------------------------------------------
 
             rec._validate_generated_leave(
                 existing_leave
             )
+
+    # =========================================================
+    # LIMPIEZA DE ASIGNACIONES ANTIGUAS
+    # =========================================================
+
+    def _cleanup_legacy_compensation_allocation(self):
+        """
+        El sistema antiguo creaba una hr.leave.allocation.
+
+        Solo eliminamos la asignación directamente enlazada
+        al movimiento Overtime.
+        """
+
+        for rec in self:
+
+            if (
+                rec.type != "compensation"
+                or not rec.leave_allocation_id
+            ):
+                continue
+
+            allocation = (
+                rec.leave_allocation_id
+                .sudo()
+            )
+
+            # Desvincular primero.
+            rec.with_context(
+                skip_comp_sync=True,
+                skip_overtime_limit=True,
+            ).write({
+                "leave_allocation_id": False,
+            })
+
+            # Intentamos rechazarla antes de eliminar.
+            if (
+                allocation.state == "validate"
+                and hasattr(
+                    allocation,
+                    "action_refuse",
+                )
+            ):
+                try:
+                    allocation.action_refuse()
+                except Exception:
+                    pass
+
+            allocation.unlink()
 
     # =========================================================
     # HORAS CON SIGNO
@@ -1059,13 +1181,14 @@ class HrOvertimeEntry(models.Model):
         "state",
     )
     def _compute_signed_hours(self):
+
         for rec in self:
             rec.signed_hours = (
                 rec._get_signed_hours()
             )
 
     # =========================================================
-    # ELIMINAR
+    # ELIMINAR MOVIMIENTO
     # =========================================================
 
     def unlink(self):
@@ -1077,12 +1200,9 @@ class HrOvertimeEntry(models.Model):
                     "type"
                 ].selection
             ).get(
-                rec.type
+                rec.type,
+                rec.type,
             )
-
-            # -------------------------------------------------
-            # LOG ANTES DE BORRAR
-            # -------------------------------------------------
 
             rec.employee_id.message_post(
                 body=(
@@ -1093,87 +1213,67 @@ class HrOvertimeEntry(models.Model):
             )
 
             # -------------------------------------------------
-            # NUEVO SISTEMA:
-            # eliminar ausencia generada.
+            # Ausencia del sistema nuevo
             # -------------------------------------------------
 
-            compensation_leave = (
-                rec.compensation_leave_id.sudo()
+            leave = (
+                rec.compensation_leave_id
+                .sudo()
             )
 
-            if compensation_leave:
+            if leave:
 
                 rec.with_context(
-                    skip_comp_sync=True
+                    skip_comp_sync=True,
+                    skip_overtime_limit=True,
                 ).write({
                     "compensation_leave_id": False,
                 })
 
-                compensation_leave.unlink()
+                if (
+                    leave.state == "validate"
+                    and hasattr(
+                        leave,
+                        "action_draft",
+                    )
+                ):
+                    try:
+                        leave.action_draft()
+                    except Exception:
+                        pass
+
+                leave.unlink()
 
             # -------------------------------------------------
-            # LEGACY:
-            # eliminar asignación antigua únicamente si
-            # pertenecía directamente a este registro.
+            # Asignación legacy
             # -------------------------------------------------
 
             allocation = (
-                rec.leave_allocation_id.sudo()
+                rec.leave_allocation_id
+                .sudo()
             )
 
             if allocation:
 
                 rec.with_context(
-                    skip_comp_sync=True
+                    skip_comp_sync=True,
+                    skip_overtime_limit=True,
                 ).write({
                     "leave_allocation_id": False,
                 })
 
+                if (
+                    allocation.state == "validate"
+                    and hasattr(
+                        allocation,
+                        "action_refuse",
+                    )
+                ):
+                    try:
+                        allocation.action_refuse()
+                    except Exception:
+                        pass
+
                 allocation.unlink()
 
         return super().unlink()
-    
-    def _cleanup_legacy_compensation_allocation(self):
-        """
-        El sistema antiguo creaba una hr.leave.allocation
-        al confirmar una compensación.
-
-        Eliminamos únicamente la asignación enlazada directamente
-        a este movimiento Overtime.
-        """
-
-        for rec in self:
-
-            if (
-                rec.type != "compensation"
-                or not rec.leave_allocation_id
-            ):
-                continue
-
-            allocation = (
-                rec.leave_allocation_id.sudo()
-            )
-
-            # Primero quitamos el enlace.
-            rec.with_context(
-                skip_comp_sync=True,
-                skip_overtime_limit=True,
-            ).write({
-                "leave_allocation_id": False,
-            })
-
-            # Si está aprobada intentamos rechazarla
-            # antes de eliminar.
-            if (
-                allocation.state == "validate"
-                and hasattr(
-                    allocation,
-                    "action_refuse",
-                )
-            ):
-                try:
-                    allocation.sudo().action_refuse()
-                except Exception:
-                    pass
-
-            allocation.sudo().unlink()
