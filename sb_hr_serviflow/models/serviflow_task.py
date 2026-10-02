@@ -413,10 +413,12 @@ class ServiflowTask(models.Model):
 
     def _create_review_tasks(self):
         for task in self:
+
             if task.task_type != 'budget':
                 continue
 
             task._ensure_sale_order()
+
             if not task.sale_order_id:
                 raise UserError(
                     _('No se encontro ningun presupuesto vinculado a esta solicitud.')
@@ -424,221 +426,462 @@ class ServiflowTask(models.Model):
 
             review_domain = task._review_scope_domain()
 
-            last_review = self.env['serviflow.task'].sudo().search(
-                review_domain,
-                order='review_round desc, id desc',
-                limit=1,
-            )
-            next_round = (last_review.review_round or 0) + 1 if last_review else 1
+            # =====================================================
+            # Calcular siguiente ronda
+            # =====================================================
 
-            # Una sola ronda puede estar abierta a la vez.
-            current_open_reviews = self.env['serviflow.task'].sudo().search_count(
+            last_review = self.env["serviflow.task"].sudo().search([
+                ("project_id", "=", task.project_id.id),
+                ("task_type", "=", "review"),
+            ], order="review_round desc", limit=1)
+
+            new_round = (
+                last_review.review_round + 1
+                if last_review
+                else 1
+            )
+
+            # =====================================================
+            # Evitar más de una ronda abierta
+            # =====================================================
+
+            current_open_reviews = self.env[
+                'serviflow.task'
+            ].sudo().search_count(
                 review_domain + [
                     ('review_result', '=', 'pending'),
                     ('state', '=', 'pending'),
                 ]
             )
+
             if current_open_reviews:
                 continue
 
-            reviewers = self.env['serviflow.reviewer.config'].sudo().search([
+            # =====================================================
+            # Obtener revisores
+            # =====================================================
+
+            reviewers = self.env[
+                'serviflow.reviewer.config'
+            ].sudo().search([
                 ('active', '=', True),
             ])
+
             if not reviewers:
-                raise UserError(_('No hay revisores configurados en Serviflow.'))
+                raise UserError(
+                    _('No hay revisores configurados en Serviflow.')
+                )
+
+            # =====================================================
+            # Crear revisiones
+            # =====================================================
 
             for reviewer in reviewers:
-                review_task = self.env['serviflow.task'].sudo().create({
-                    'name': f'{reviewer.name} - {task.opportunity_id.name}',
-                    'opportunity_id': task.opportunity_id.id,
-                    'sale_order_id': task.sale_order_id.id,
-                    'project_id': task.project_id.id if task.project_id else False,
-                    'project_task_id': (
-                        task.project_task_id.id if task.project_task_id else False
+
+                review_task = self.env[
+                    'serviflow.task'
+                ].sudo().create({
+
+                    'name': (
+                        f'{reviewer.name} - '
+                        f'{task.opportunity_id.name}'
                     ),
+
+                    'opportunity_id': task.opportunity_id.id,
+
+                    # Campo antiguo para compatibilidad
+                    'sale_order_id': task.sale_order_id.id,
+
+                    # Proyecto y tarea real
+                    'project_id': (
+                        task.project_id.id
+                        if task.project_id
+                        else False
+                    ),
+
+                    'project_task_id': (
+                        task.project_task_id.id
+                        if task.project_task_id
+                        else False
+                    ),
+
                     'task_type': 'review',
-                    'review_round': next_round,
+
+                    'review_round': new_round,
+
                     'assigned_user_id': reviewer.user_id.id,
                     'accepted_user_id': False,
+
                     'state': 'pending',
                     'review_result': 'pending',
-                    'note': f'Revision asignada a {reviewer.name}.',
+
+                    'note': (
+                        f'Revision asignada a '
+                        f'{reviewer.name}.'
+                    ),
                 })
+
                 review_task._create_user_activity()
 
     def action_review_approve(self):
         for task in self:
-            if task.task_type != 'review':
-                raise UserError(_('Esta solicitud no es una revision.'))
+            if task.task_type != "review":
+                raise UserError(
+                    _("Esta solicitud no es una revisión.")
+                )
 
             if task.assigned_user_id != self.env.user:
                 raise UserError(
-                    _('Solo el revisor asignado puede aprobar esta revision.')
+                    _("Solo el revisor asignado puede aprobar esta revisión.")
                 )
 
-            if task.review_result != 'pending':
-                raise UserError(_('Esta revision ya fue procesada.'))
-
-            task._ensure_sale_order()
+            if task.review_result != "pending":
+                raise UserError(
+                    _("Esta revisión ya ha sido procesada.")
+                )
 
             task.write({
-                'review_result': 'approved',
-                'state': 'done',
-                'accepted_user_id': self.env.user.id,
-                'reviewed_at': fields.Datetime.now(),
+                "review_result": "approved",
+                "state": "done",
+                "accepted_user_id": self.env.user.id,
+                "reviewed_at": fields.Datetime.now(),
             })
+
             task._close_user_activities()
+
             task.message_post(
-                body=f'Revision aprobada por {self.env.user.name}'
+                body=(
+                    f"Revisión aprobada por "
+                    f"<b>{self.env.user.name}</b>."
+                )
             )
+
             task._check_all_reviews_done()
 
         return True
 
     def _check_all_reviews_done(self):
-        for task in self:
-            review_domain = task._review_scope_domain()
+        for current_review in self:
 
-            last_review = self.env['serviflow.task'].sudo().search(
-                review_domain,
-                order='review_round desc, id desc',
-                limit=1,
-            )
-            if not last_review:
+            if current_review.task_type != "review":
                 continue
 
-            reviews = self.env['serviflow.task'].sudo().search(
-                review_domain + [('review_round', '=', last_review.review_round)]
-            )
+            project = current_review.project_id
+
+            if not project:
+                continue
+
+            current_round = current_review.review_round
+
+            reviews = self.env["serviflow.task"].sudo().search([
+                ("project_id", "=", project.id),
+                ("task_type", "=", "review"),
+                ("review_round", "=", current_round),
+            ])
 
             if not reviews:
                 continue
 
-            if any(review.review_result == 'rejected' for review in reviews):
+            # =====================================================
+            # Si hay algún rechazo -> no aprobar
+            # =====================================================
+
+            if any(
+                review.review_result == "rejected"
+                for review in reviews
+            ):
                 continue
 
-            if any(review.review_result == 'pending' for review in reviews):
+            # =====================================================
+            # Si queda alguna pendiente -> esperar
+            # =====================================================
+
+            if any(
+                review.review_result == "pending"
+                for review in reviews
+            ):
                 continue
 
-            approval_time = fields.Datetime.now()
-            reviews.write({'final_approved_at': approval_time})
+            # =====================================================
+            # Todas tienen que estar aprobadas
+            # =====================================================
 
-            presupuestado_stage = self.env['crm.stage'].sudo().search([
-                ('name', '=', 'Presupuestado'),
-            ], limit=1)
-            if not presupuestado_stage:
-                raise UserError(_('No se encontro la etapa Presupuestado.'))
+            if not all(
+                review.review_result == "approved"
+                for review in reviews
+            ):
+                continue
 
-            task.opportunity_id.with_context(serviflow_from_wizard=True).write({
-                'stage_id': presupuestado_stage.id,
+            now = fields.Datetime.now()
+
+            reviews.sudo().write({
+                "final_approved_at": now,
             })
-            task.opportunity_id.message_post(
-                body=(
-                    'Presupuesto validado por todos los revisores '
-                    f'en la ronda {last_review.review_round}.'
-                )
-            )
 
-            if task.project_task_id:
-                task.project_task_id.message_post(
-                    body=(
-                        '<b>Presupuesto validado internamente.</b><br/>'
-                        f'Ronda de revision: {last_review.review_round}.'
-                    )
-                )
+            # =====================================================
+            # CRM -> PRESUPUESTADO
+            # =====================================================
 
-    def _send_back_to_technical(self, rejection_reason=False):
-        for task in self:
-            opportunity = task.opportunity_id
+            opportunity = current_review.opportunity_id
 
-            technical_stage = self.env['crm.stage'].sudo().search([
-                ('name', '=', 'Solicitado Presupuesto Técnico'),
-            ], limit=1)
-            if not technical_stage:
-                technical_stage = self.env['crm.stage'].sudo().search([
-                    ('name', '=', 'Solicitado Presupuesto Tecnico'),
+            if opportunity:
+                budgeted_stage = self.env["crm.stage"].sudo().search([
+                    ("name", "=", "Presupuestado"),
                 ], limit=1)
 
-            if technical_stage and opportunity.stage_id != technical_stage:
-                opportunity.with_context(serviflow_from_wizard=True).write({
-                    'stage_id': technical_stage.id,
+                if not budgeted_stage:
+                    raise UserError(
+                        _(
+                            "No se encontró la etapa CRM "
+                            "'Presupuestado'."
+                        )
+                    )
+
+                opportunity.with_context(
+                    serviflow_from_wizard=True
+                ).sudo().write({
+                    "stage_id": budgeted_stage.id,
                 })
 
-            original_domain = [('task_type', '=', 'budget')]
-            if task.project_id:
-                original_domain.append(('project_id', '=', task.project_id.id))
-            else:
-                original_domain.append(('opportunity_id', '=', opportunity.id))
+                opportunity.message_post(
+                    body=(
+                        "<b>Presupuesto aprobado internamente.</b><br/>"
+                        f"Todos los revisores han aprobado "
+                        f"la ronda {current_round}."
+                    )
+                )
 
-            original_budget_task = self.env['serviflow.task'].sudo().search(
-                original_domain,
-                order='create_date desc, id desc',
-                limit=1,
+            # =====================================================
+            # PROJECT permanece COMPLETO
+            # =====================================================
+
+            complete_status = self.env[
+                "project.status"
+            ].sudo().search([
+                ("name", "=", "Completo"),
+            ], limit=1)
+
+            if complete_status:
+                if project.project_status != complete_status:
+                    project.sudo().write({
+                        "project_status": complete_status.id,
+                    })
+
+            project.message_post(
+                body=(
+                    "<b>Presupuesto aprobado internamente.</b><br/>"
+                    f"Ronda de revisión: {current_round}.<br/>"
+                    "Todos los verificadores han aprobado."
+                )
             )
-            if not original_budget_task:
+
+        return True
+
+    def _send_back_to_technical(self, rejection_reason=False):
+        for review in self:
+
+            if review.task_type != "review":
                 continue
 
-            project = original_budget_task.project_id
-            project_task = original_budget_task.project_task_id
+            opportunity = review.opportunity_id
+            project = review.project_id
+            project_task = review.project_task_id
 
-            in_progress_status = self.env['project.status'].sudo().search([
-                ('name', '=', 'En proceso'),
-            ], limit=1)
-            if not in_progress_status:
+            if not project:
                 raise UserError(
-                    _("No se encontro el estado de proyecto 'En proceso'.")
+                    _("La revisión no tiene un proyecto asociado.")
                 )
 
-            if project:
-                project.sudo().write({
-                    'project_status': in_progress_status.id,
-                })
-
-            if project_task:
-                project_task.sudo().write({
-                    'state': '01_in_progress',
-                })
-
-            review_domain = task._review_scope_domain() + [
-                ('review_round', '=', task.review_round),
-                ('state', 'in', ['pending', 'accepted']),
-            ]
-            open_reviews = self.env['serviflow.task'].sudo().search(review_domain)
-            open_reviews.write({'state': 'cancelled'})
-            open_reviews._close_user_activities()
-
-            assigned_user = (
-                original_budget_task.accepted_user_id
-                or original_budget_task.assigned_user_id
-            )
-
-            original_budget_task.sudo().write({
-                'state': 'accepted',
-                'completed_at': False,
-                'assigned_user_id': assigned_user.id if assigned_user else False,
-                'accepted_user_id': assigned_user.id if assigned_user else False,
-            })
-
-            if project_task:
-                body = (
-                    '<b>Presupuesto rechazado.</b><br/>'
-                    f'Revisor: {self.env.user.name}'
+            if not project_task:
+                raise UserError(
+                    _("La revisión no tiene una tarea de proyecto asociada.")
                 )
-                if rejection_reason:
-                    body += (
-                        '<br/><br/><b>Motivo de rechazo:</b><br/>'
-                        f'{rejection_reason}'
+
+            # =====================================================
+            # 1. CRM -> mantener Solicitud PPTO Técnico
+            # =====================================================
+
+            technical_stage = self.env["crm.stage"].sudo().search([
+                ("name", "=", "Solicitado Presupuesto Técnico")
+            ], limit=1)
+
+            if technical_stage and opportunity:
+                if opportunity.stage_id != technical_stage:
+                    opportunity.with_context(
+                        serviflow_from_wizard=True
+                    ).sudo().write({
+                        "stage_id": technical_stage.id,
+                    })
+
+            # =====================================================
+            # 2. Proyecto -> EN PROGRESO
+            # =====================================================
+
+            progress_status = self.env["project.status"].sudo().search([
+                ("name", "=", "En progreso"),
+            ], limit=1)
+
+            if not progress_status:
+                raise UserError(
+                    _(
+                        "No se encontró el estado de proyecto "
+                        "'En progreso'."
                     )
-                project_task.message_post(body=body)
+                )
 
-            if assigned_user:
-                original_budget_task._create_user_activity()
+            if project.project_status != progress_status:
+                project.sudo().write({
+                    "project_status": progress_status.id,
+                })
 
-            original_budget_task.message_post(
+            # =====================================================
+            # 3. Tarea -> EN PROCESO
+            # =====================================================
+            #
+            # IMPORTANTE:
+            # Primero cambiamos el proyecto a En progreso.
+            #
+            # Así, cuando el write() de project.task ejecute
+            # _serviflow_check_tasks_completion(), no volverá
+            # a lanzar una revisión accidentalmente.
+            # =====================================================
+
+            if project_task.state != "01_in_progress":
+                project_task.sudo().write({
+                    "state": "01_in_progress",
+                })
+
+            # =====================================================
+            # 4. Cancelar las demás revisiones de esta ronda
+            # =====================================================
+
+            other_reviews = self.env["serviflow.task"].sudo().search([
+                ("project_id", "=", project.id),
+                ("task_type", "=", "review"),
+                ("review_round", "=", review.review_round),
+                ("id", "!=", review.id),
+                ("state", "in", ["pending", "accepted"]),
+            ])
+
+            for other_review in other_reviews:
+                other_review._close_user_activities()
+
+            if other_reviews:
+                other_reviews.write({
+                    "state": "cancelled",
+                })
+
+            # =====================================================
+            # 5. Buscar solicitud técnica principal
+            # =====================================================
+
+            budget_task = self.env["serviflow.task"].sudo().search([
+                ("project_id", "=", project.id),
+                ("task_type", "=", "budget"),
+            ], order="create_date desc", limit=1)
+
+            # =====================================================
+            # 6. Recuperar técnico responsable
+            # =====================================================
+
+            technical_user = False
+
+            # Preferimos el asignado real en Project
+            if project_task.user_ids:
+                technical_user = project_task.user_ids[0]
+
+            # Compatibilidad con Serviflow
+            elif budget_task:
+                technical_user = (
+                    budget_task.accepted_user_id
+                    or budget_task.assigned_user_id
+                )
+
+            # =====================================================
+            # 7. Reactivar solicitud interna Serviflow
+            # =====================================================
+
+            if budget_task:
+                values = {
+                    "state": "accepted",
+                }
+
+                if technical_user:
+                    values.update({
+                        "assigned_user_id": technical_user.id,
+                        "accepted_user_id": technical_user.id,
+                    })
+
+                budget_task.sudo().write(values)
+
+            # =====================================================
+            # 8. Chatter de la tarea Project
+            # =====================================================
+
+            reason_html = rejection_reason or "Sin motivo indicado."
+
+            project_task.message_post(
                 body=(
-                    f'Presupuesto devuelto para correccion por {self.env.user.name}.'
+                    "<b>Presupuesto devuelto para corrección.</b><br/>"
+                    f"<b>Revisor:</b> {self.env.user.name}<br/>"
+                    f"<b>Ronda:</b> {review.review_round}<br/><br/>"
+                    f"<b>Motivo del rechazo:</b><br/>"
+                    f"{reason_html}"
                 )
             )
+
+            # =====================================================
+            # 9. Chatter del proyecto
+            # =====================================================
+
+            project.message_post(
+                body=(
+                    "<b>Proyecto devuelto a En progreso.</b><br/>"
+                    f"El presupuesto ha sido rechazado por "
+                    f"{self.env.user.name}.<br/><br/>"
+                    f"<b>Motivo:</b><br/>"
+                    f"{reason_html}"
+                )
+            )
+
+            # =====================================================
+            # 10. Crear actividad al técnico
+            # =====================================================
+
+            if technical_user:
+                activity_type = self.env.ref(
+                    "mail.mail_activity_data_todo",
+                    raise_if_not_found=False,
+                )
+
+                if activity_type:
+                    project_task.activity_schedule(
+                        activity_type_id=activity_type.id,
+                        user_id=technical_user.id,
+                        summary="Corregir presupuesto técnico",
+                        note=(
+                            f"<b>Presupuesto rechazado.</b><br/>"
+                            f"<b>Revisor:</b> {self.env.user.name}<br/>"
+                            f"<b>Ronda:</b> {review.review_round}<br/><br/>"
+                            f"<b>Motivo:</b><br/>"
+                            f"{reason_html}"
+                        ),
+                    )
+
+            # =====================================================
+            # 11. Trazabilidad interna Serviflow
+            # =====================================================
+
+            if budget_task:
+                budget_task.message_post(
+                    body=(
+                        f"Presupuesto devuelto para corrección por "
+                        f"<b>{self.env.user.name}</b>.<br/>"
+                        f"<b>Motivo:</b><br/>{reason_html}"
+                    )
+                )
+
+        return True
 
     # -------------------------------------------------------------------------
     # Actividades

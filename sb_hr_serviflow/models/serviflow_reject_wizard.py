@@ -43,8 +43,7 @@ class ServiflowRejectWizard(models.TransientModel):
                 _("Esta revisión ya fue procesada.")
             )
 
-        task._ensure_sale_order()
-
+        # Guardar resultado de la revisión
         task.write({
             "review_result": "rejected",
             "state": "done",
@@ -53,15 +52,19 @@ class ServiflowRejectWizard(models.TransientModel):
             "rejection_reason": self.rejection_reason.strip(),
         })
 
+        # Cerrar actividad del revisor
         task._close_user_activities()
 
+        # Trazabilidad
         task.message_post(
             body=(
                 f"<b>Revisión rechazada por {self.env.user.name}</b><br/>"
-                f"<b>Motivo:</b><br/>{self.rejection_reason}"
+                f"<b>Motivo:</b><br/>"
+                f"{self.rejection_reason.strip()}"
             )
         )
 
+        # Devolver proyecto/tarea al técnico
         task._send_back_to_technical(
             rejection_reason=self.rejection_reason.strip()
         )
