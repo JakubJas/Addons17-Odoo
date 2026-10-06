@@ -112,12 +112,21 @@ class ProjectTask(models.Model):
         ServiflowTask = self.env["serviflow.task"].sudo()
 
         for task in self:
+
+            # -----------------------------------------------------
+            # Valores por defecto
+            # -----------------------------------------------------
+
             task.serviflow_request_note = False
             task.serviflow_priority_label = False
             task.serviflow_requested_date_label = False
             task.serviflow_last_rejection_reason = False
             task.serviflow_current_round = 0
             task.serviflow_has_rejection = False
+
+            # -----------------------------------------------------
+            # Buscar solicitud técnica principal
+            # -----------------------------------------------------
 
             budget_task = ServiflowTask.search([
                 ("project_task_id", "=", task.id),
@@ -127,9 +136,9 @@ class ProjectTask(models.Model):
             if not budget_task:
                 continue
 
-            # ---------------------------------------------
-            # Extraer datos desde note
-            # ---------------------------------------------
+            # =====================================================
+            # DATOS DE SOLICITUD
+            # =====================================================
 
             note = budget_task.note or ""
 
@@ -138,26 +147,25 @@ class ProjectTask(models.Model):
             indications = False
 
             if note:
-                lines = note.splitlines()
-
                 indication_lines = []
                 capture_indications = False
 
-                for line in lines:
+                for line in note.splitlines():
+
                     clean_line = line.strip()
 
                     if clean_line.startswith("PRIORIDAD:"):
                         priority_label = clean_line.replace(
                             "PRIORIDAD:",
                             "",
-                            1
+                            1,
                         ).strip()
 
                     elif clean_line.startswith("FECHA DESEADA:"):
                         requested_date_label = clean_line.replace(
                             "FECHA DESEADA:",
                             "",
-                            1
+                            1,
                         ).strip()
 
                     elif clean_line.startswith("INDICACIONES:"):
@@ -174,35 +182,46 @@ class ProjectTask(models.Model):
             task.serviflow_requested_date_label = requested_date_label
             task.serviflow_request_note = indications
 
-            # ---------------------------------------------
-            # Última ronda
-            # ---------------------------------------------
+            # =====================================================
+            # ÚLTIMA RONDA REAL DEL PROYECTO
+            # =====================================================
 
             last_review = ServiflowTask.search([
                 ("project_id", "=", task.project_id.id),
                 ("task_type", "=", "review"),
             ], order="review_round desc, create_date desc", limit=1)
 
-            if last_review:
-                task.serviflow_current_round = (
-                    last_review.review_round or 0
-                )
+            if not last_review:
+                continue
 
-            # ---------------------------------------------
-            # Último rechazo
-            # ---------------------------------------------
+            current_round = last_review.review_round or 0
 
-            rejected_review = ServiflowTask.search([
+            task.serviflow_current_round = current_round
+
+            # =====================================================
+            # REVISIONES DE LA ÚLTIMA RONDA
+            # =====================================================
+
+            current_reviews = ServiflowTask.search([
                 ("project_id", "=", task.project_id.id),
                 ("task_type", "=", "review"),
-                ("review_result", "=", "rejected"),
-                ("rejection_reason", "!=", False),
-            ], order="review_round desc, reviewed_at desc, create_date desc", limit=1)
+                ("review_round", "=", current_round),
+            ])
+
+            # =====================================================
+            # ¿LA ÚLTIMA RONDA FUE RECHAZADA?
+            # =====================================================
+
+            rejected_review = current_reviews.filtered(
+                lambda r: r.review_result == "rejected"
+            )[:1]
 
             if rejected_review:
                 task.serviflow_has_rejection = True
+
                 task.serviflow_last_rejection_reason = (
                     rejected_review.rejection_reason
+                    or "Sin motivo indicado."
                 )
 
     # =========================================================
