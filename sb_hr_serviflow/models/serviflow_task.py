@@ -248,11 +248,11 @@ class ServiflowTask(models.Model):
         self._close_user_activities()
 
         self.message_post(
-            body=f'Solicitud aceptada por <b>{self.env.user.name}</b>.'
+            body=f'Solicitud aceptada por {self.env.user.name}.'
         )
         self.project_task_id.message_post(
             body=(
-                f'Tarea aceptada y asignada a <b>{self.env.user.name}</b> '
+                f'Tarea aceptada y asignada a {self.env.user.name} '
                 'mediante Serviflow.'
             )
         )
@@ -552,7 +552,7 @@ class ServiflowTask(models.Model):
             task.message_post(
                 body=(
                     f"Revisión aprobada por "
-                    f"<b>{self.env.user.name}</b>."
+                    f"{self.env.user.name}."
                 )
             )
 
@@ -645,7 +645,7 @@ class ServiflowTask(models.Model):
 
                 opportunity.message_post(
                     body=(
-                        "<b>Presupuesto aprobado internamente.</b><br/>"
+                        "Presupuesto aprobado internamente."
                         f"Todos los revisores han aprobado "
                         f"la ronda {current_round}."
                     )
@@ -669,8 +669,8 @@ class ServiflowTask(models.Model):
 
             project.message_post(
                 body=(
-                    "<b>Presupuesto aprobado internamente.</b><br/>"
-                    f"Ronda de revisión: {current_round}.<br/>"
+                    "Presupuesto aprobado internamente."
+                    f"Ronda de revisión: {current_round}."
                     "Todos los verificadores han aprobado."
                 )
             )
@@ -822,10 +822,10 @@ class ServiflowTask(models.Model):
 
             project_task.message_post(
                 body=(
-                    "<b>Presupuesto devuelto para corrección.</b><br/>"
-                    f"<b>Revisor:</b> {self.env.user.name}<br/>"
-                    f"<b>Ronda:</b> {review.review_round}<br/><br/>"
-                    f"<b>Motivo del rechazo:</b><br/>"
+                    "Presupuesto devuelto para corrección."
+                    f"Revisor: {self.env.user.name}"
+                    f"Ronda: {review.review_round}"
+                    f"Motivo del rechazo:"
                     f"{reason_html}"
                 )
             )
@@ -836,10 +836,10 @@ class ServiflowTask(models.Model):
 
             project.message_post(
                 body=(
-                    "<b>Proyecto devuelto a En progreso.</b><br/>"
+                    "Proyecto devuelto a En progreso."
                     f"El presupuesto ha sido rechazado por "
-                    f"{self.env.user.name}.<br/><br/>"
-                    f"<b>Motivo:</b><br/>"
+                    f"{self.env.user.name}."
+                    f"Motivo:"
                     f"{reason_html}"
                 )
             )
@@ -860,10 +860,10 @@ class ServiflowTask(models.Model):
                         user_id=technical_user.id,
                         summary="Corregir presupuesto técnico",
                         note=(
-                            f"<b>Presupuesto rechazado.</b><br/>"
-                            f"<b>Revisor:</b> {self.env.user.name}<br/>"
-                            f"<b>Ronda:</b> {review.review_round}<br/><br/>"
-                            f"<b>Motivo:</b><br/>"
+                            f"Presupuesto rechazado."
+                            f"Revisor: {self.env.user.name}"
+                            f"Ronda: {review.review_round}"
+                            f"Motivo:"
                             f"{reason_html}"
                         ),
                     )
@@ -876,8 +876,8 @@ class ServiflowTask(models.Model):
                 budget_task.message_post(
                     body=(
                         f"Presupuesto devuelto para corrección por "
-                        f"<b>{self.env.user.name}</b>.<br/>"
-                        f"<b>Motivo:</b><br/>{reason_html}"
+                        f"{self.env.user.name}."
+                        f"Motivo: {reason_html}"
                     )
                 )
 
