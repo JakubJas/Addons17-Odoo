@@ -32,6 +32,36 @@ class ProjectTask(models.Model):
         string="Nº Presupuestos",
         compute="_compute_serviflow_data",
     )
+    
+    serviflow_request_note = fields.Text(
+        string="Indicaciones Serviflow",
+        compute="_compute_serviflow_detail_data",
+    )
+
+    serviflow_priority_label = fields.Char(
+        string="Prioridad",
+        compute="_compute_serviflow_detail_data",
+    )
+
+    serviflow_requested_date_label = fields.Char(
+        string="Fecha deseada",
+        compute="_compute_serviflow_detail_data",
+    )
+
+    serviflow_last_rejection_reason = fields.Text(
+        string="Último motivo de rechazo",
+        compute="_compute_serviflow_detail_data",
+    )
+
+    serviflow_current_round = fields.Integer(
+        string="Ronda actual",
+        compute="_compute_serviflow_detail_data",
+    )
+
+    serviflow_has_rejection = fields.Boolean(
+        string="Tiene rechazo",
+        compute="_compute_serviflow_detail_data",
+    )
 
     # =========================================================
     # COMPUTE
@@ -77,6 +107,103 @@ class ProjectTask(models.Model):
             task.serviflow_sale_order_count = len(
                 task.project_id.serviflow_sale_order_ids
             )
+            
+    def _compute_serviflow_detail_data(self):
+        ServiflowTask = self.env["serviflow.task"].sudo()
+
+        for task in self:
+            task.serviflow_request_note = False
+            task.serviflow_priority_label = False
+            task.serviflow_requested_date_label = False
+            task.serviflow_last_rejection_reason = False
+            task.serviflow_current_round = 0
+            task.serviflow_has_rejection = False
+
+            budget_task = ServiflowTask.search([
+                ("project_task_id", "=", task.id),
+                ("task_type", "=", "budget"),
+            ], order="create_date desc", limit=1)
+
+            if not budget_task:
+                continue
+
+            # ---------------------------------------------
+            # Extraer datos desde note
+            # ---------------------------------------------
+
+            note = budget_task.note or ""
+
+            priority_label = False
+            requested_date_label = False
+            indications = False
+
+            if note:
+                lines = note.splitlines()
+
+                indication_lines = []
+                capture_indications = False
+
+                for line in lines:
+                    clean_line = line.strip()
+
+                    if clean_line.startswith("PRIORIDAD:"):
+                        priority_label = clean_line.replace(
+                            "PRIORIDAD:",
+                            "",
+                            1
+                        ).strip()
+
+                    elif clean_line.startswith("FECHA DESEADA:"):
+                        requested_date_label = clean_line.replace(
+                            "FECHA DESEADA:",
+                            "",
+                            1
+                        ).strip()
+
+                    elif clean_line.startswith("INDICACIONES:"):
+                        capture_indications = True
+
+                    elif capture_indications:
+                        indication_lines.append(line)
+
+                indications = "\n".join(
+                    indication_lines
+                ).strip()
+
+            task.serviflow_priority_label = priority_label
+            task.serviflow_requested_date_label = requested_date_label
+            task.serviflow_request_note = indications
+
+            # ---------------------------------------------
+            # Última ronda
+            # ---------------------------------------------
+
+            last_review = ServiflowTask.search([
+                ("project_id", "=", task.project_id.id),
+                ("task_type", "=", "review"),
+            ], order="review_round desc, create_date desc", limit=1)
+
+            if last_review:
+                task.serviflow_current_round = (
+                    last_review.review_round or 0
+                )
+
+            # ---------------------------------------------
+            # Último rechazo
+            # ---------------------------------------------
+
+            rejected_review = ServiflowTask.search([
+                ("project_id", "=", task.project_id.id),
+                ("task_type", "=", "review"),
+                ("review_result", "=", "rejected"),
+                ("rejection_reason", "!=", False),
+            ], order="review_round desc, reviewed_at desc, create_date desc", limit=1)
+
+            if rejected_review:
+                task.serviflow_has_rejection = True
+                task.serviflow_last_rejection_reason = (
+                    rejected_review.rejection_reason
+                )
 
     # =========================================================
     # GUARDAR SELECTOR MÚLTIPLE EN EL PROYECTO
