@@ -1,17 +1,22 @@
+
 {
     'name': 'Serviflow',
     'version': '17.0.1.0.5',
     'summary': 'Flujo de trabajo entre departamentos/modulos',
+
     'description': """
         Este modulo permite gestionar:
         - Flujo entre CRM, Oficina Tecnica, Proyecto y revisores.
         - Solicitudes de presupuesto tecnico.
         - Asignacion a tecnicos y validacion interna.
+        - Validacion de proyectos historicos OfiPro.
     """,
+
     'author': 'Servi Byte Canarias SL',
     'website': 'https://www.servibyte.com',
     'category': 'Tools',
     'license': 'LGPL-3',
+
     'depends': [
         'base',
         'crm',
@@ -22,16 +27,22 @@
         'project_hr',
         'project_status',
     ],
+
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',
+
         'views/serviflow_task_views.xml',
         'views/serviflow_reviewer_config_views.xml',
         'views/serviflow_request_budget_wizard_views.xml',
         'views/serviflow_reject_wizard_views.xml',
         'views/crm_lead_views.xml',
-        "views/project_task_views.xml",
+
+        'views/serviflow_ofipro_import_views.xml',
+
+        'views/project_task_views.xml',
     ],
+
     'assets': {
         'web.assets_backend': [
             'sb_hr_serviflow/static/src/js/serviflow_activity_menu.js',
@@ -39,6 +50,7 @@
             'sb_hr_serviflow/static/src/js/crm_serviflow_kanban.js',
         ],
     },
+
     'installable': True,
     'application': True,
 }
