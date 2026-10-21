@@ -53,6 +53,16 @@
                             <field name="overtime_change_date"
                                 string="Aplicar desde"/>
 
+                            <field name="overtime_new_weekly_hours"
+                                string="Horas semanales nuevas"
+                                widget="float_time"
+                                invisible="overtime_new_mode != 'weekly'"/>
+
+                            <field name="overtime_transition_week_hours"
+                                string="Horas previstas semana de transición"
+                                widget="float_time"
+                                invisible="overtime_new_mode != 'weekly'"/>
+
                             <button name="action_apply_overtime_mode_change"
                                     string="Aplicar cambio"
                                     type="object"
@@ -91,6 +101,11 @@
                                 string="Horas semanales"
                                 widget="float_time"
                                 invisible="calculation_mode != 'weekly'"/>
+
+                            <field name="transition_week_expected_hours"
+                                string="Previstas semana transición"
+                                widget="float_time"
+                                optional="show"/>
 
                         </tree>
 

@@ -45,6 +45,12 @@ class HrEmployeeOvertimePeriod(models.Model):
         ),
     )
 
+    transition_week_expected_hours = fields.Float(
+        string="Previstas semana de transición",
+        help="Total previsto de la semana que contiene la fecha de inicio, "
+             "solo cuando cambia la jornada a mitad de una semana flexible.",
+    )
+
     @api.constrains(
         "calculation_mode",
         "weekly_expected_hours",
@@ -100,15 +106,8 @@ class HrEmployeeOvertimePeriod(models.Model):
                     "de cálculo del empleado."
                 )
 
-    @api.constrains("calculation_mode", "date_from")
-    def _check_weekly_starts_on_monday(self):
+    @api.constrains("transition_week_expected_hours")
+    def _check_transition_week_hours(self):
         for rec in self:
-            if (
-                rec.calculation_mode == "weekly"
-                and rec.date_from
-                and rec.date_from.weekday() != 0
-            ):
-                raise ValidationError(
-                    "Los periodos semanales flexibles deben "
-                    "comenzar un lunes."
-                )
+            if rec.transition_week_expected_hours < 0:
+                raise ValidationError("Las horas de transición no pueden ser negativas.")

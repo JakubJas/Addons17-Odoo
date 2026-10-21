@@ -78,6 +78,17 @@ class HrEmployee(models.Model):
         string="Aplicar desde",
     )
 
+    overtime_new_weekly_hours = fields.Float(
+        string="Nueva jornada semanal",
+        help="Horas semanales pactadas desde la fecha del cambio (por ejemplo 40:00).",
+    )
+
+    overtime_transition_week_hours = fields.Float(
+        string="Previstas semana de transición",
+        help=("Solo si el cambio ocurre entre martes y domingo: total de horas "
+              "previstas para esa semana completa, combinando ambos contratos."),
+    )
+
     @api.depends("overtime_entry_ids.hours", "overtime_entry_ids.type", "overtime_entry_ids.state")
     def _compute_overtime_balance(self):
         for emp in self:
@@ -149,60 +160,66 @@ class HrEmployee(models.Model):
             previous_day
         )
 
-        if previous_mode == new_mode:
-            raise UserError(
-                "El empleado ya tenía esta modalidad antes de "
-                "la fecha indicada.\n\n"
-                "No es necesario volver a aplicar el mismo tipo "
-                "de horario."
-            )
+        # Una jornada puede cambiar sin que cambie la modalidad semanal.
+        # No rechazamos weekly -> weekly cuando cambian las horas pactadas.
+        if previous_mode == new_mode == "daily":
+            raise UserError("El empleado ya tiene modalidad diaria.")
 
         last_period = Period.search([
             ("employee_id", "=", self.id),
         ], order="date_from desc, id desc", limit=1)
 
-        if last_period and not last_period.date_to:
-            if change_date <= last_period.date_from:
+        replace_same_start = bool(
+            last_period and last_period.date_from == change_date
+        )
+        if last_period and not last_period.date_to and not replace_same_start:
+            if change_date < last_period.date_from:
                 raise UserError(
-                    "La fecha del nuevo cambio debe ser posterior "
-                    "al inicio del último periodo registrado."
+                    "La fecha del cambio no puede ser anterior al ultimo periodo."
                 )
-
             last_period.write({
                 "date_to": change_date - timedelta(days=1),
             })
-            
+        elif last_period and change_date < last_period.date_from:
+            raise UserError(
+                "La fecha del cambio no puede ser anterior al ultimo periodo."
+            )
+
         weekly_expected_hours = 0.0
-
+        transition_hours = 0.0
         if new_mode == "weekly":
-
-            if not self.resource_calendar_id:
-                raise UserError(
-                    "El empleado no tiene un horario de trabajo configurado."
-                )
-
-            weekly_expected_hours = self._get_calendar_weekly_hours()
-
+            weekly_expected_hours = (
+                self.overtime_new_weekly_hours
+                or self._get_calendar_weekly_hours()
+            )
             if weekly_expected_hours <= 0:
-                raise UserError(
-                    "El horario de trabajo del empleado no tiene "
-                    "horas semanales configuradas."
-                )
+                raise UserError("Indica una jornada semanal mayor que cero.")
+            if previous_mode == "weekly" and change_date.weekday() != 0:
+                transition_hours = self.overtime_transition_week_hours
+                if transition_hours <= 0:
+                    raise UserError(
+                        "El cambio se produce a mitad de semana. Indica las "
+                        "horas previstas TOTALES de la semana de transición "
+                        "(lunes a domingo), considerando ambos horarios."
+                    )
 
-        Period.create({
+        period_values = {
             "employee_id": self.id,
             "date_from": change_date,
             "date_to": False,
             "calculation_mode": new_mode,
-            "weekly_expected_hours": (
-                weekly_expected_hours
-                if new_mode == "weekly"
-                else 0.0
-            ),
-        })
+            "weekly_expected_hours": weekly_expected_hours,
+            "transition_week_expected_hours": transition_hours,
+        }
+        if replace_same_start:
+            last_period.write(period_values)
+        else:
+            Period.create(period_values)
 
         self.overtime_new_mode = False
         self.overtime_change_date = False
+        self.overtime_new_weekly_hours = 0.0
+        self.overtime_transition_week_hours = 0.0
 
         today = fields.Date.context_today(self)
 
@@ -211,7 +228,7 @@ class HrEmployee(models.Model):
                 "hr.attendance"
             ]._rebuild_employee_overtime_from_date(
                 self,
-                change_date,
+                change_date - timedelta(days=change_date.weekday()),
             )
 
         return {

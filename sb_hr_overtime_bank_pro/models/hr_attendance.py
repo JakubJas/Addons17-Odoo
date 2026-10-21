@@ -661,6 +661,9 @@ class HrAttendance(models.Model):
         if not employee or not date_from:
             return True
 
+        # El movimiento semanal lleva fecha del lunes, aunque el cambio
+        # contractual se produzca el jueves.
+        date_from = date_from - timedelta(days=date_from.weekday())
         OvertimeEntry = self.env["hr.overtime.entry"]
 
         automatic_entries = OvertimeEntry.search([
@@ -710,6 +713,8 @@ class HrAttendance(models.Model):
             ):
                 affected_days.add(local_day)
 
+        # Recalcular cada semana completa, incluso si no hay fichajes
+        # en uno de los días de la semana.
         for local_day in sorted(affected_days):
             self._sync_overtime_for_employee_period(
                 employee.id,
@@ -718,58 +723,38 @@ class HrAttendance(models.Model):
 
         return True
 
-    def _get_expected_hours_for_week(
-        self,
-        employee,
-        week_start,
-        week_end,
-    ):
+    def _get_expected_hours_for_week(self, employee, week_start, week_end):
+        """Jornada semanal congelada; admite cambios de jornada entre semana.
+
+        Si hay dos periodos semanales distintos en la misma semana,
+        se exige el total explícito de horas de transición en el periodo
+        nuevo, para no inventar la distribución de las antiguas 32 horas.
         """
-        Devuelve las horas semanales previstas correspondientes
-        al periodo semanal flexible.
-
-        Los periodos nuevos ya tienen weekly_expected_hours
-        congelado.
-
-        Para periodos antiguos creados antes de existir ese campo,
-        si weekly_expected_hours == 0, recuperamos automáticamente
-        las horas del resource.calendar actual y las guardamos
-        una única vez en el periodo.
-        """
-
+        from odoo.exceptions import UserError
         Period = self.env["hr.employee.overtime.period"]
-
-        period = Period.search([
+        periods = Period.search([
             ("employee_id", "=", employee.id),
-            ("date_from", "<=", week_start),
-            "|",
-            ("date_to", "=", False),
-            ("date_to", ">=", week_end),
-            ("calculation_mode", "=", "weekly"),
-        ], order="date_from desc, id desc", limit=1)
-
-        # No existe un periodo semanal válido para esta semana.
-        if not period:
+            ("date_from", "<=", week_end),
+            "|", ("date_to", "=", False), ("date_to", ">=", week_start),
+        ], order="date_from asc, id asc")
+        weekly = periods.filtered(lambda p: p.calculation_mode == "weekly")
+        if not weekly:
             return 0.0
-
-        if period.weekly_expected_hours > 0:
-            return round(
-                period.weekly_expected_hours,
-                4,
-            )
-
-        weekly_hours = employee._get_calendar_weekly_hours()
-
-        if weekly_hours <= 0:
-            return 0.0
-
-        period.write({
-            "weekly_expected_hours": weekly_hours,
-        })
-
-        return round(
-            weekly_hours,
-            4,
+        if len(weekly) == 1 and weekly[0].date_from <= week_start and (
+            not weekly[0].date_to or weekly[0].date_to >= week_end
+        ):
+            return round(weekly[0].weekly_expected_hours, 4)
+        # Semana partida: nuevo periodo comienza dentro de la semana.
+        new_period = weekly.filtered(
+            lambda p: week_start < p.date_from <= week_end
+        )[:1]
+        if new_period and new_period.transition_week_expected_hours > 0:
+            return round(new_period.transition_week_expected_hours, 4)
+        raise UserError(
+            "La semana %s - %s contiene un cambio de jornada. "
+            "Indica las horas previstas de la semana de transición "
+            "en el periodo que empieza dentro de esa semana."
+            % (week_start, week_end)
         )
 
     def _get_worked_hours_for_week(
@@ -834,10 +819,7 @@ class HrAttendance(models.Model):
             week_end
         )
 
-        if (
-            mode_at_week_start != "weekly"
-            or mode_at_week_end != "weekly"
-        ):
+        if mode_at_week_start != "weekly" or mode_at_week_end != "weekly":
             return
 
         weekly_entries = OvertimeEntry.search([
