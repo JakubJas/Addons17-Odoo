@@ -723,13 +723,76 @@ class HrAttendance(models.Model):
 
         return True
 
-    def _get_expected_hours_for_week(self, employee, week_start, week_end):
-        """Jornada semanal congelada; admite cambios de jornada entre semana.
+    def _get_weekly_public_holiday_hours(self, employee, week_start, week_end):
+        """Horas de festivos generales del calendario del empleado.
 
-        Si hay dos periodos semanales distintos en la misma semana,
-        se exige el total explícito de horas de transición en el periodo
-        nuevo, para no inventar la distribución de las antiguas 32 horas.
+        Solo se consideran cierres globales del calendario (resource_id=False).
+        No se incluyen vacaciones, bajas ni permisos individuales.
+        Los intervalos se intersectan con las horas ordinarias del calendario,
+        por lo que un festivo en un dia libre no descuenta horas.
         """
+        calendar = employee.resource_calendar_id
+        if not calendar:
+            return 0.0
+
+        timezone = pytz.timezone(self._get_employee_tz(employee))
+        local_start = timezone.localize(datetime.combine(week_start, time.min))
+        local_end = timezone.localize(
+            datetime.combine(week_end + timedelta(days=1), time.min)
+        )
+        utc_start = local_start.astimezone(pytz.UTC).replace(tzinfo=None)
+        utc_end = local_end.astimezone(pytz.UTC).replace(tzinfo=None)
+
+        Leaves = self.env["resource.calendar.leaves"]
+        closures = Leaves.search([
+            ("calendar_id", "=", calendar.id),
+            ("resource_id", "=", False),
+            ("date_from", "<", fields.Datetime.to_string(utc_end)),
+            ("date_to", ">", fields.Datetime.to_string(utc_start)),
+        ])
+        if not closures:
+            return 0.0
+
+        # Intervalos de jornada base, sin excluir festivos ni ausencias.
+        # Se toman del calendario vigente. Para calendarios historicos que
+        # cambiaron de distribucion, hay que validar el resultado con RRHH.
+        attendance_intervals = calendar._attendance_intervals_batch(
+            local_start, local_end, resources=employee.resource_id
+        )
+        intervals = (
+            attendance_intervals.get(employee.resource_id.id)
+            or attendance_intervals.get(employee.resource_id)
+            or []
+        )
+
+        # Unir cierres superpuestos para no descontar dos veces el mismo tramo.
+        closed_ranges = []
+        for closure in closures:
+            closed_ranges.append((
+                pytz.UTC.localize(fields.Datetime.to_datetime(closure.date_from)),
+                pytz.UTC.localize(fields.Datetime.to_datetime(closure.date_to)),
+            ))
+        closed_ranges.sort(key=lambda item: item[0])
+        merged = []
+        for start, end in closed_ranges:
+            if merged and start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
+            else:
+                merged.append((start, end))
+
+        total = 0.0
+        for interval in intervals:
+            work_start = interval[0].astimezone(pytz.UTC)
+            work_end = interval[1].astimezone(pytz.UTC)
+            for close_start, close_end in merged:
+                overlap_start = max(work_start, close_start)
+                overlap_end = min(work_end, close_end)
+                if overlap_end > overlap_start:
+                    total += (overlap_end - overlap_start).total_seconds() / 3600.0
+        return round(total, 4)
+
+    def _get_expected_hours_for_week_details(self, employee, week_start, week_end):
+        """Devuelve (horas exigibles, base contractual, festivos)."""
         from odoo.exceptions import UserError
         Period = self.env["hr.employee.overtime.period"]
         periods = Period.search([
@@ -739,23 +802,37 @@ class HrAttendance(models.Model):
         ], order="date_from asc, id asc")
         weekly = periods.filtered(lambda p: p.calculation_mode == "weekly")
         if not weekly:
-            return 0.0
+            return (0.0, 0.0, 0.0)
         if len(weekly) == 1 and weekly[0].date_from <= week_start and (
             not weekly[0].date_to or weekly[0].date_to >= week_end
         ):
-            return round(weekly[0].weekly_expected_hours, 4)
-        # Semana partida: nuevo periodo comienza dentro de la semana.
-        new_period = weekly.filtered(
-            lambda p: week_start < p.date_from <= week_end
-        )[:1]
-        if new_period and new_period.transition_week_expected_hours > 0:
-            return round(new_period.transition_week_expected_hours, 4)
-        raise UserError(
-            "La semana %s - %s contiene un cambio de jornada. "
-            "Indica las horas previstas de la semana de transición "
-            "en el periodo que empieza dentro de esa semana."
-            % (week_start, week_end)
+            base_hours = weekly[0].weekly_expected_hours
+        else:
+            new_period = weekly.filtered(
+                lambda p: week_start < p.date_from <= week_end
+            )[:1]
+            if not new_period or new_period.transition_week_expected_hours <= 0:
+                raise UserError(
+                    "La semana %s - %s contiene un cambio de jornada. "
+                    "Indica las horas previstas de la semana de transicion "
+                    "en el periodo que empieza dentro de esa semana."
+                    % (week_start, week_end)
+                )
+            base_hours = new_period.transition_week_expected_hours
+
+        holiday_hours = self._get_weekly_public_holiday_hours(
+            employee, week_start, week_end
         )
+        return (
+            round(max(0.0, base_hours - holiday_hours), 4),
+            round(base_hours, 4),
+            round(holiday_hours, 4),
+        )
+
+    def _get_expected_hours_for_week(self, employee, week_start, week_end):
+        return self._get_expected_hours_for_week_details(
+            employee, week_start, week_end
+        )[0]
 
     def _get_worked_hours_for_week(
         self,
@@ -887,10 +964,10 @@ class HrAttendance(models.Model):
                 skip_comp_sync=True,
             ).unlink()
 
-        expected_hours = self._get_expected_hours_for_week(
-            employee,
-            week_start,
-            week_end,
+        expected_hours, base_hours, holiday_hours = (
+            self._get_expected_hours_for_week_details(
+                employee, week_start, week_end
+            )
         )
 
         worked_hours = self._get_worked_hours_for_week(
@@ -956,7 +1033,11 @@ class HrAttendance(models.Model):
                 f"{week_end.strftime('%d/%m/%Y')})\n"
                 f"Horas trabajadas: "
                 f"{self._format_hours(worked_hours)}\n"
-                f"Horas previstas: "
+                f"Jornada semanal prevista: "
+                f"{self._format_hours(base_hours)}\n"
+                f"Festivos de calendario: -"
+                f"{self._format_hours(holiday_hours)}\n"
+                f"Horas exigibles: "
                 f"{self._format_hours(expected_hours)}\n"
                 f"Diferencia: "
                 f"{self._format_hours(difference)}"
