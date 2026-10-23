@@ -1,0 +1,51 @@
+SERVIBYTE - Odoo 17 - sb_partner_sequence - version 17.0.1.1.0
+
+1) QUE SE HA CORREGIDO
+- Compatibilidad con create() en lote (@api.model_create_multi).
+- No comparar parent_id vacío con un entero.
+- Respetar un código ya asignado expresamente, sin consumir otro.
+- Determinar el tipo desde vals cuando se proporciona, y conservar el contexto como alternativa.
+- Mantener los nombres de campo, datos y vistas originales.
+
+2) IMPORTANTE: EVITAR HUECOS POR VALIDACIONES FALLIDAS
+La corrección del método create() por sí sola NO evita huecos en secuencias
+POSTGRESQL de implementación Estándar. Después de recuperar el hueco y
+comprobar la numeración, cambia la secuencia Customer Sequence a
+Implementación: Sin huecos (no_gap) desde Odoo, en ventana de mantenimiento.
+Antes de cambiarla, comprueba que el siguiente número sea C01969,
+y DESPUES del cambio comprueba que siga siendo C01969 SIN crear un cliente
+real. Si el valor difiere, cancela y revisa. Nunca pongas el siguiente
+número por debajo de otro código en uso.
+Advertencia: sin huecos no garantiza continuidad si se borran contactos,
+si otro código reserva números y guarda, o si hay personalizaciones adicionales.
+Puede implicar mayor contención bajo altas cargas concurrentes.
+
+3) REPARAR C01968 Y RECUPERAR C01969 COMO SIGUIENTE
+- Hacer copia de seguridad completa de la base de datos.
+- Parar temporalmente altas automáticas, integraciones y creación de clientes.
+- Buscar C01968 en TODOS los contactos, también archivados.
+- Comprobar que el cliente correcto es Julian Martin (actual C01969).
+- Solo si el siguiente número SIGUE siendo 1970 y C01968 está libre:
+  asignar C01968 a Julian y dejar C01969 como siguiente número.
+- NO cambiar solo el cliente: eso dejaría un hueco en C01969.
+- Archivo herramientas/reparar_C01968_odoo_shell.py: verificación y reparación
+  mediante Odoo shell; primero APLICAR=False, indicar ID_CLIENTE_JULIAN.
+  No usar en producción sin revisar exactamente los resultados.
+- Para aplicar, con APLICAR=True se preparan las operaciones en la misma
+  transacción. En shell ejecutar env.cr.commit() después de verificar,
+  o env.cr.rollback() si surge alguna duda.
+- Tras la reparación, cambiar la implementación a Sin huecos, verificar
+  el próximo número y probar altas con DNI inválido en una base de pruebas.
+
+4) INSTALACION
+- Sustituir la carpeta del módulo sb_partner_sequence en addons personalizados.
+- Reiniciar el servicio Odoo y actualizar el módulo desde Aplicaciones.
+- No instalar directamente en producción sin comprobarlo antes en demo.
+- Este paquete NO cambia automáticamente el tipo de secuencia ni los
+  clientes existentes: evita ajustes silenciosos sobre datos reales.
+
+5) LIMITES
+- No se ha ejecutado contra la base de datos real de Servibyte.
+- No se han inspeccionado otros módulos que validen DNI/NIE/Pasaporte.
+- Una implementación sin huecos revierte los números consumidos dentro de
+  transacciones fallidas, pero no impide huecos por otras operaciones.

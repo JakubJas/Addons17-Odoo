@@ -1,6 +1,6 @@
 {
     'name': 'Customer and Vendor Sequence Number',
-    'version': '17.0.1.0.0',
+    'version': '17.0.1.1.0',
     'summary': 'Número de secuencia de clientes y proveedores',
     'description': """
         Este módulo genera los números secuenciales de clientes y proveedores
