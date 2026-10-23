@@ -724,9 +724,9 @@ class HrAttendance(models.Model):
         return True
 
     def _get_weekly_public_holiday_hours(self, employee, week_start, week_end):
-        """Horas de festivos generales del calendario del empleado.
+        """Horas de festivos generales o del calendario del empleado.
 
-        Solo se consideran cierres globales del calendario (resource_id=False).
+        Incluye calendar_id=False y cierres del calendario (resource_id=False).
         No se incluyen vacaciones, bajas ni permisos individuales.
         Los intervalos se intersectan con las horas ordinarias del calendario,
         por lo que un festivo en un dia libre no descuenta horas.
@@ -744,12 +744,25 @@ class HrAttendance(models.Model):
         utc_end = local_end.astimezone(pytz.UTC).replace(tzinfo=None)
 
         Leaves = self.env["resource.calendar.leaves"]
-        closures = Leaves.search([
-            ("calendar_id", "=", calendar.id),
+        # Los festivos generales de Odoo tienen calendar_id=False.
+        # Los especificos llevan el calendario concreto. En ambos casos
+        # excluimos ausencias individuales (resource_id != False).
+        domain = [
             ("resource_id", "=", False),
+            "|",
+            ("calendar_id", "=", False),
+            ("calendar_id", "=", calendar.id),
             ("date_from", "<", fields.Datetime.to_string(utc_end)),
             ("date_to", ">", fields.Datetime.to_string(utc_start)),
-        ])
+        ]
+        # Evitar festivos de otras empresas en entornos multiempresa.
+        if "company_id" in Leaves._fields and employee.company_id:
+            domain += [
+                "|",
+                ("company_id", "=", False),
+                ("company_id", "=", employee.company_id.id),
+            ]
+        closures = Leaves.search(domain)
         if not closures:
             return 0.0
 
