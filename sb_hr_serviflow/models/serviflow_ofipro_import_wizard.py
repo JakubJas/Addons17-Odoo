@@ -6,7 +6,7 @@ import json
 import re
 
 from collections import Counter, defaultdict
-from datetime import date, datetime
+from datetime import datetime
 from html import escape
 
 from odoo import fields, models, _
@@ -14,11 +14,12 @@ from odoo.exceptions import UserError
 
 
 PAGE_SIZE = 40
+BATCH_SIZE = 100
 
 
 class ServiflowOfiproImportWizard(models.TransientModel):
     _name = 'serviflow.ofipro.import.wizard'
-    _description = 'Validacion de proyectos historicos OfiPro'
+    _description = 'Importacion historica de proyectos OfiPro'
 
     file = fields.Binary(
         string='Archivo CSV',
@@ -33,14 +34,16 @@ class ServiflowOfiproImportWizard(models.TransientModel):
     state = fields.Selection(
         [
             ('draft', 'Sin analizar'),
-            ('validated', 'Analizado'),
+            ('validated', 'Validado'),
+            ('importing', 'Importacion en curso'),
+            ('done', 'Finalizado'),
         ],
         default='draft',
         readonly=True,
     )
 
     summary = fields.Html(
-        string='Resumen de validacion',
+        string='Resumen',
         readonly=True,
         sanitize=True,
     )
@@ -51,7 +54,7 @@ class ServiflowOfiproImportWizard(models.TransientModel):
     )
 
     issues = fields.Text(
-        string='Incidencias',
+        string='Detalle de incidencias y omisiones',
         readonly=True,
     )
 
@@ -76,17 +79,53 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         readonly=True,
     )
 
+    cursor = fields.Integer(
+        string='Filas procesadas',
+        default=0,
+        readonly=True,
+    )
+
+    imported_count = fields.Integer(
+        string='Importados',
+        readonly=True,
+    )
+
+    missing_count = fields.Integer(
+        string='Sin cliente',
+        readonly=True,
+    )
+
+    duplicate_count = fields.Integer(
+        string='Cliente duplicado',
+        readonly=True,
+    )
+
+    invalid_count = fields.Integer(
+        string='Datos invalidos',
+        readonly=True,
+    )
+
+    existing_count = fields.Integer(
+        string='Key existente',
+        readonly=True,
+    )
+
+    failed_count = fields.Integer(
+        string='Errores de creacion',
+        readonly=True,
+    )
+
+    import_log = fields.Text(
+        string='Registro completo',
+        readonly=True,
+    )
+
+    # =========================================================
+    # LECTURA Y NORMALIZACION
+    # =========================================================
+
     def _read_date(self, value):
-        if isinstance(value, datetime):
-            return value.date()
-
-        if isinstance(value, date):
-            return value
-
         value = str(value or '').strip()
-
-        if not value:
-            return None
 
         for fmt in (
             '%d/%m/%Y',
@@ -102,23 +141,20 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     value, fmt
                 ).date()
             except ValueError:
-                continue
+                pass
 
         return None
 
     def _numeric_code(self, value):
-        if value is None or isinstance(value, bool):
-            return None
-
-        raw = str(value).strip()
+        raw = str(value or '').strip()
 
         if re.fullmatch(r'\d+\.0+', raw):
             raw = raw.split('.')[0]
 
-        if not re.fullmatch(r'\d+', raw):
-            return None
+        if re.fullmatch(r'\d+', raw):
+            return str(int(raw))
 
-        return str(int(raw))
+        return None
 
     def _read_csv(self):
         self.ensure_one()
@@ -147,103 +183,90 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 _('El CSV supera el limite de 20 MB.')
             )
 
-        text = None
+        try:
+            text = content.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            text = content.decode('cp1252')
 
-        for encoding in ('utf-8-sig', 'cp1252'):
-            try:
-                text = content.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-
-        if text is None:
-            raise UserError(
-                _('Codificacion CSV no reconocida.')
-            )
+        sample = text[:8192]
 
         try:
-            sample = text[:8192]
+            delimiter = csv.Sniffer().sniff(
+                sample,
+                delimiters=';,\t',
+            ).delimiter
 
-            try:
-                dialect = csv.Sniffer().sniff(
-                    sample,
-                    delimiters=';,\t',
-                )
-                delimiter = dialect.delimiter
-
-            except csv.Error:
-                first_line = text.splitlines()[0]
-
-                delimiter = (
-                    ';'
-                    if first_line.count(';') >=
-                    first_line.count(',')
-                    else ','
-                )
-
-            reader = csv.DictReader(
-                io.StringIO(text, newline=''),
-                delimiter=delimiter,
+        except csv.Error:
+            first_line = (
+                text.splitlines()[0]
+                if text.splitlines()
+                else ''
             )
 
-            if not reader.fieldnames:
-                raise UserError(
-                    _('El CSV no tiene cabeceras.')
-                )
+            delimiter = (
+                ';'
+                if first_line.count(';') >= first_line.count(',')
+                else ','
+            )
 
-            reader.fieldnames = [
-                str(name or '').strip().upper()
-                for name in reader.fieldnames
-            ]
+        reader = csv.DictReader(
+            io.StringIO(text, newline=''),
+            delimiter=delimiter,
+        )
 
-            required = [
-                'A_CLIENTE__CODIGO',
-                'A_CLIENTE__EMPRESA',
-                'CODIGO',
-                'FECHA_ENTREGA',
-                'FECHA',
-                'FIRME',
-                'NOTAS',
-                'ID_CLIENTE',
-            ]
+        if not reader.fieldnames:
+            raise UserError(
+                _('El CSV no tiene cabeceras.')
+            )
 
-            missing = [
-                name for name in required
-                if name not in reader.fieldnames
-            ]
+        reader.fieldnames = [
+            str(name or '').strip().upper()
+            for name in reader.fieldnames
+        ]
 
-            if missing:
-                raise UserError(
-                    _('Faltan columnas: %s')
-                    % ', '.join(missing)
-                )
+        required = (
+            'A_CLIENTE__CODIGO',
+            'A_CLIENTE__EMPRESA',
+            'CODIGO',
+            'FECHA_ENTREGA',
+            'FECHA',
+            'FIRME',
+            'NOTAS',
+            'ID_CLIENTE',
+        )
 
-            rows = []
+        missing = [
+            name
+            for name in required
+            if name not in reader.fieldnames
+        ]
 
-            for line_number, values in enumerate(
+        if missing:
+            raise UserError(
+                _('Faltan columnas: %s')
+                % ', '.join(missing)
+            )
+
+        result = []
+
+        try:
+            for line, values in enumerate(
                 reader, start=2
             ):
-                if not any(
-                    str(value or '').strip()
-                    for value in values.values()
-                    if isinstance(value, str)
-                ):
-                    continue
-
                 if None in values:
                     raise UserError(
                         _(
-                            'Fila %s: hay mas columnas que '
-                            'en la cabecera. Comprueba el '
-                            'separador CSV.'
-                        ) % line_number
+                            'Fila %s: separador CSV incorrecto.'
+                        ) % line
                     )
 
-                rows.append(
-                    (line_number, values)
-                )
+                if not any(
+                    str(value or '').strip()
+                    for value in values.values()
+                ):
+                    continue
 
-            return rows
+                result.append((line, values))
 
         except csv.Error as exc:
             raise UserError(
@@ -251,105 +274,225 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 % str(exc)
             ) from exc
 
+        return result
+
+    # =========================================================
+    # VISTA PREVIA Y PAGINACION
+    # =========================================================
+
     def _build_preview_page(self, rows, page):
         start = (page - 1) * PAGE_SIZE
-        end = start + PAGE_SIZE
+        end = page * PAGE_SIZE
 
         lines = [
-            'Fila | Key | Cliente | Inicio | '
-            'Entrega | Estado | Validacion'
+            'Fila | Key | Pedido | Cliente | Inicio | '
+            'Entrega | Estado | Resultado'
         ]
 
         for row in rows[start:end]:
             errors = row.get('errors') or []
 
-            validation = (
+            result = row.get('result') or (
                 'ERROR: ' + '; '.join(errors)
-                if errors else 'OK'
+                if errors
+                else 'OK'
             )
 
             lines.append(
-                '%s | %s | %s | %s | %s | %s | %s'
+                '%s | %s | %s | %s | %s | %s | %s | %s'
                 % (
                     row['line'],
                     row['key'],
+                    row['order'] or '-',
                     row['partner_code'],
                     row['start'] or '-',
                     row['delivery'] or '-',
                     'Completo'
                     if row['completed']
                     else 'Pendiente',
-                    validation,
+                    result,
                 )
             )
 
         return '\n'.join(lines)
 
-    def _show_page(self, new_page):
+    def _open_wizard(self):
         self.ensure_one()
-
-        if not self.preview_data:
-            raise UserError(
-                _('Primero debes analizar un archivo CSV.')
-            )
-
-        rows = json.loads(
-            self.preview_data
-        )
-
-        new_page = max(
-            1,
-            min(new_page, self.total_pages),
-        )
-
-        self.write({
-            'page': new_page,
-            'preview': self._build_preview_page(
-                rows, new_page
-            ),
-        })
 
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Validar proyectos OfiPro',
+            'name': 'Importar proyectos historicos OfiPro',
             'res_model': self._name,
             'res_id': self.id,
             'view_mode': 'form',
             'target': 'current',
         }
 
+    def _show_page(self, number):
+        self.ensure_one()
+
+        if not self.preview_data:
+            raise UserError(
+                _('Analiza primero el CSV.')
+            )
+
+        rows = json.loads(self.preview_data)
+
+        page = max(
+            1,
+            min(number, self.total_pages),
+        )
+
+        self.write({
+            'page': page,
+            'preview': self._build_preview_page(
+                rows, page
+            ),
+        })
+
+        return self._open_wizard()
+
     def action_next_page(self):
         self.ensure_one()
-        return self._show_page(
-            self.page + 1
-        )
+        return self._show_page(self.page + 1)
 
     def action_previous_page(self):
         self.ensure_one()
-        return self._show_page(
-            self.page - 1
+        return self._show_page(self.page - 1)
+
+    # =========================================================
+    # RESUMEN
+    # =========================================================
+
+    def _summary_html(
+        self, rows, counters=None, cursor=0
+    ):
+        counters = counters or {}
+
+        invalid = sum(
+            bool(row['errors'])
+            for row in rows
         )
+
+        completed = sum(
+            row['completed']
+            for row in rows
+        )
+
+        parts = [
+            '<p><b>Proyectos analizados:</b> %s</p>'
+            % len(rows),
+
+            '<p><b>Validos inicialmente:</b> %s</p>'
+            % (len(rows) - invalid),
+
+            '<p><b>Con incidencias iniciales:</b> %s</p>'
+            % invalid,
+
+            '<p><b>Completos en CSV:</b> %s</p>'
+            % completed,
+
+            '<p><b>Pendientes en CSV:</b> %s</p>'
+            % (len(rows) - completed),
+
+            '<p><b>Procesados:</b> %s / %s</p>'
+            % (cursor, len(rows)),
+        ]
+
+        if cursor:
+            labels = (
+                ('Importados', 'imported_count'),
+                ('Omitidos sin cliente', 'missing_count'),
+                (
+                    'Omitidos por cliente duplicado',
+                    'duplicate_count',
+                ),
+                (
+                    'Omitidos por datos invalidos',
+                    'invalid_count',
+                ),
+                (
+                    'Omitidos por key existente',
+                    'existing_count',
+                ),
+                (
+                    'Errores de creacion',
+                    'failed_count',
+                ),
+            )
+
+            for label, key in labels:
+                parts.append(
+                    '<p><b>%s:</b> %s</p>'
+                    % (
+                        escape(label),
+                        counters.get(key, 0),
+                    )
+                )
+
+            skipped = sum(
+                counters.get(key, 0)
+                for key in (
+                    'missing_count',
+                    'duplicate_count',
+                    'invalid_count',
+                    'existing_count',
+                    'failed_count',
+                )
+            )
+
+            parts.append(
+                '<p><b>Total no importados:</b> %s</p>'
+                % skipped
+            )
+
+        if cursor == len(rows) and cursor:
+            status = 'FINALIZADO'
+        elif cursor:
+            status = 'EN CURSO'
+        else:
+            status = (
+                'Solo validacion; pendiente de importar'
+            )
+
+        parts.append(
+            '<p><b>Estado:</b> %s</p>'
+            % status
+        )
+
+        return ''.join(parts)
+
+    # =========================================================
+    # VALIDAR CSV
+    # =========================================================
 
     def action_validate(self):
         self.ensure_one()
 
-        source_rows = self._read_csv()
-
-        if not source_rows:
+        if self.state != 'draft':
             raise UserError(
-                _('El CSV no contiene proyectos.')
+                _(
+                    'Este asistente ya fue validado. '
+                    'Abre uno nuevo para analizar otro CSV.'
+                )
+            )
+
+        source = self._read_csv()
+
+        if not source:
+            raise UserError(
+                _('El CSV esta vacio.')
             )
 
         rows = []
         seen_orders = set()
 
-        for line_number, values in source_rows:
-
+        for line, values in source:
             code = self._numeric_code(
                 values.get('A_CLIENTE__CODIGO')
             )
 
-            check_code = self._numeric_code(
+            check = self._numeric_code(
                 values.get('ID_CLIENTE')
             )
 
@@ -371,7 +514,7 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
             errors = []
 
-            if code is None or check_code != code:
+            if code is None or check != code:
                 errors.append(
                     'Codigo de cliente invalido o distinto'
                 )
@@ -383,18 +526,18 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
             elif order in seen_orders:
                 errors.append(
-                    'Codigo de pedido duplicado en CSV'
+                    'Pedido duplicado en CSV'
                 )
 
             if order is not None:
                 seen_orders.add(order)
 
-            if start is None:
+            if not start:
                 errors.append(
                     'Fecha de inicio invalida'
                 )
 
-            if delivery is None:
+            if not delivery:
                 errors.append(
                     'Fecha de entrega invalida'
                 )
@@ -411,18 +554,25 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
             else:
                 completed = False
-
                 errors.append(
-                    'Valor FIRME invalido: %s'
+                    'FIRME invalido: %s'
                     % firm
                 )
 
             rows.append({
-                'line': line_number,
+                'line': line,
                 'code': code,
                 'order': order,
-                'start': start,
-                'delivery': delivery,
+                'start': (
+                    start.isoformat()
+                    if start
+                    else ''
+                ),
+                'delivery': (
+                    delivery.isoformat()
+                    if delivery
+                    else ''
+                ),
                 'completed': completed,
                 'company': str(
                     values.get(
@@ -435,8 +585,10 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 'errors': errors,
             })
 
-        # Vincular codigos OfiPro con Odoo.
-        # Ejemplo: 579 -> C00579
+        # -----------------------------------------------------
+        # Buscar clientes de Odoo por sequence_number
+        # Ejemplo: OfiPro 579 -> Odoo C00579
+        # -----------------------------------------------------
 
         codes = {
             'C%s' % row['code'].zfill(5)
@@ -461,16 +613,16 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         for partner in partners:
             by_code[
                 partner.sequence_number
-            ].append(partner)
+            ].append(partner.id)
 
-        # Numeracion historica por fecha.
-
-        years = Counter()
+        # -----------------------------------------------------
+        # Calcular numeracion historica
+        # -----------------------------------------------------
 
         sorted_rows = sorted(
             rows,
             key=lambda row: (
-                row['start'] or date.max,
+                row['start'] or '9999-12-31',
                 int(row['order'])
                 if row['order']
                 else 10**15,
@@ -478,28 +630,35 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             ),
         )
 
-        for row in sorted_rows:
+        years = Counter()
 
+        for row in sorted_rows:
             if row['start']:
-                year = row['start'].year
+                year = row['start'][:4]
+
                 years[year] += 1
 
                 row['key'] = '%05d/%s' % (
                     years[year],
                     year,
                 )
-
             else:
                 row['key'] = 'SIN FECHA'
 
             row['partner_code'] = (
                 'C%s' % row['code'].zfill(5)
-                if row['code'] is not None
+                if row['code']
                 else ''
             )
 
             matches = by_code.get(
                 row['partner_code'], []
+            )
+
+            row['partner_id'] = (
+                matches[0]
+                if len(matches) == 1
+                else False
             )
 
             if not matches:
@@ -510,57 +669,57 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
             elif len(matches) > 1:
                 row['errors'].append(
-                    'Cliente duplicado en Odoo: %s'
-                    % row['partner_code']
+                    'Cliente duplicado: %s (%s contactos)'
+                    % (
+                        row['partner_code'],
+                        len(matches),
+                    )
                 )
 
-            else:
-                row['partner_name'] = (
-                    matches[0].name
+        # -----------------------------------------------------
+        # Comprobar keys existentes
+        # -----------------------------------------------------
+
+        project_model = (
+            self.env['project.project'].sudo()
+        )
+
+        if 'key' not in project_model._fields:
+            raise UserError(
+                _(
+                    'El modelo project.project no tiene '
+                    'campo key. Revisa el modulo de numeracion.'
                 )
+            )
 
-        # Comprobar keys existentes en Odoo.
-
-        planned_keys = [
+        keys = [
             row['key']
             for row in rows
             if row['start']
         ]
 
-        existing = (
-            self.env['project.project']
-            .sudo()
-            .search([
-                ('key', 'in', planned_keys)
-            ])
-        )
-
-        used_keys = set(
-            existing.mapped('key')
+        existing = set(
+            project_model.search([
+                ('key', 'in', keys)
+            ]).mapped('key')
         )
 
         for row in rows:
-            if row['key'] in used_keys:
+            if row['key'] in existing:
                 row['errors'].append(
                     'Key ya existente: %s'
                     % row['key']
                 )
 
-        invalid = sum(
-            bool(row['errors'])
-            for row in rows
-        )
+        # -----------------------------------------------------
+        # Detalle de incidencias
+        # -----------------------------------------------------
 
-        completed = sum(
-            row['completed']
-            for row in rows
-        )
-
-        issues = []
+        issue_lines = []
 
         for row in rows:
             for error in row['errors']:
-                issues.append(
+                issue_lines.append(
                     'Fila %s | Pedido %s | %s'
                     % (
                         row['line'],
@@ -569,86 +728,402 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     )
                 )
 
-        # Guardar TODAS las filas de la validacion.
-
-        preview_data = []
-
-        for row in rows:
-            preview_data.append({
-                'line': row['line'],
-                'key': row['key'],
-                'partner_code': row['partner_code'],
-                'start': str(
-                    row['start'] or ''
-                ),
-                'delivery': str(
-                    row['delivery'] or ''
-                ),
-                'completed': row['completed'],
-                'errors': row['errors'],
-            })
-
-        total_pages = max(
-            1,
-            (
-                len(preview_data)
-                + PAGE_SIZE - 1
-            ) // PAGE_SIZE,
-        )
-
-        preview_text = (
-            self._build_preview_page(
-                preview_data, 1
-            )
-        )
-
-        year_text = ', '.join(
-            '%s: %s' % (
-                year,
-                years[year],
-            )
-            for year in sorted(years)
-        )
-
         self.write({
             'state': 'validated',
             'page': 1,
-            'total_pages': total_pages,
+            'total_pages': max(
+                1,
+                (
+                    len(rows) + PAGE_SIZE - 1
+                ) // PAGE_SIZE,
+            ),
             'total_rows': len(rows),
             'preview_data': json.dumps(
-                preview_data,
+                rows,
                 ensure_ascii=False,
             ),
-            'summary': (
-                '<p><b>Proyectos analizados:</b> %s</p>'
-                '<p><b>Filas correctas:</b> %s</p>'
-                '<p><b>Filas con incidencias:</b> %s</p>'
-                '<p><b>Estado Completo:</b> %s</p>'
-                '<p><b>Estado Pendiente:</b> %s</p>'
-                '<p><b>Distribucion por año:</b> %s</p>'
-                '<p><b>Importacion:</b> '
-                'DESACTIVADA (solo validacion).</p>'
-            ) % (
-                len(rows),
-                len(rows) - invalid,
-                invalid,
-                completed,
-                len(rows) - completed,
-                escape(year_text),
+            'preview': self._build_preview_page(
+                rows, 1
             ),
-            'preview': preview_text,
             'issues': (
-                '\n'.join(issues[:100])
-                if issues
-                else 'Sin incidencias detectadas.'
+                '\n'.join(issue_lines)
+                if issue_lines
+                else 'Sin incidencias.'
+            ),
+            'summary': self._summary_html(rows),
+            'import_log': '',
+            'cursor': 0,
+            'imported_count': 0,
+            'missing_count': 0,
+            'duplicate_count': 0,
+            'invalid_count': 0,
+            'existing_count': 0,
+            'failed_count': 0,
+        })
+
+        return self._open_wizard()
+
+    # =========================================================
+    # IMPORTACION REAL POR LOTES
+    # =========================================================
+
+    def action_import_batch(self):
+        self.ensure_one()
+
+        if (
+            self.state not in (
+                'validated',
+                'importing',
+            )
+            or not self.preview_data
+        ):
+            raise UserError(
+                _('Primero debes validar el CSV.')
+            )
+
+        rows = json.loads(
+            self.preview_data
+        )
+
+        if self.cursor >= len(rows):
+            raise UserError(
+                _('La importacion ya esta finalizada.')
+            )
+
+        project_model = (
+            self.env['project.project'].sudo()
+        )
+
+        if (
+            'key' not in project_model._fields
+            or 'partner_id' not in project_model._fields
+        ):
+            raise UserError(
+                _(
+                    'Faltan campos key o partner_id '
+                    'en project.project.'
+                )
+            )
+
+        # Evitar ejecuciones simultaneas del importador.
+
+        self.env.cr.execute(
+            'SELECT pg_advisory_xact_lock(%s)',
+            (81736251,),
+        )
+
+        counter_names = (
+            'imported_count',
+            'missing_count',
+            'duplicate_count',
+            'invalid_count',
+            'existing_count',
+            'failed_count',
+        )
+
+        counters = {
+            name: getattr(self, name)
+            for name in counter_names
+        }
+
+        log = self.import_log or ''
+
+        end = min(
+            self.cursor + BATCH_SIZE,
+            len(rows),
+        )
+
+        batch = rows[self.cursor:end]
+
+        # -----------------------------------------------------
+        # Comprobar keys ocupadas
+        # -----------------------------------------------------
+
+        keys = [
+            row['key']
+            for row in batch
+            if row['key'] != 'SIN FECHA'
+        ]
+
+        used_keys = set(
+            project_model.search([
+                ('key', 'in', keys)
+            ]).mapped('key')
+        )
+
+        # -----------------------------------------------------
+        # Comprobar clientes disponibles
+        # -----------------------------------------------------
+
+        partner_ids = [
+            row['partner_id']
+            for row in batch
+            if row.get('partner_id')
+        ]
+
+        available_partners = set(
+            self.env['res.partner']
+            .sudo()
+            .browse(partner_ids)
+            .exists()
+            .ids
+        )
+
+        # -----------------------------------------------------
+        # Buscar estados de proyecto
+        # -----------------------------------------------------
+
+        status_ids = {}
+
+        if (
+            'project_status' in project_model._fields
+            and 'project.status'
+            in self.env.registry.models
+        ):
+            status_model = (
+                self.env['project.status'].sudo()
+            )
+
+            for status_name in (
+                'Completo',
+                'Pendiente',
+            ):
+                status = status_model.search([
+                    ('name', '=', status_name)
+                ], limit=1)
+
+                if status:
+                    status_ids[
+                        status_name
+                    ] = status.id
+
+        # -----------------------------------------------------
+        # Procesar cada proyecto
+        # -----------------------------------------------------
+
+        for row in batch:
+            label = (
+                'Fila %s | Pedido %s | %s | %s'
+                % (
+                    row['line'],
+                    row['order'] or '-',
+                    row['key'],
+                    row['partner_code'],
+                )
+            )
+
+            errors = row.get('errors', [])
+
+            if any(
+                'Cliente duplicado:' in error
+                for error in errors
+            ):
+                reason = (
+                    'OMITIDO: cliente duplicado'
+                )
+                counter = 'duplicate_count'
+
+            elif (
+                any(
+                    'Cliente no encontrado:' in error
+                    for error in errors
+                )
+                or row.get('partner_id')
+                not in available_partners
+            ):
+                reason = (
+                    'OMITIDO: cliente inexistente'
+                )
+                counter = 'missing_count'
+
+            elif (
+                any(
+                    'Key ya existente:' in error
+                    for error in errors
+                )
+                or row['key'] in used_keys
+            ):
+                reason = (
+                    'OMITIDO: key ya existente'
+                )
+                counter = 'existing_count'
+
+            elif errors:
+                reason = (
+                    'OMITIDO: '
+                    + '; '.join(errors)
+                )
+                counter = 'invalid_count'
+
+            else:
+                # ---------------------------------------------
+                # Preparar nombre y descripcion
+                # ---------------------------------------------
+
+                name = (
+                    'OfiPro %s - %s'
+                    % (
+                        row['order'],
+                        row['company']
+                        or row['partner_code'],
+                    )
+                )[:250]
+
+                description = (
+                    'Importado desde OfiPro (historico).\n'
+                    'Pedido OfiPro: %s\n'
+                    'Cliente: %s\n'
+                    'Fecha: %s\n'
+                    'Entrega: %s\n'
+                    'Estado original: %s\n\n%s'
+                    % (
+                        row['order'],
+                        row['partner_code'],
+                        row['start'],
+                        row['delivery'],
+                        (
+                            'Completo'
+                            if row['completed']
+                            else 'Pendiente'
+                        ),
+                        row['notes'],
+                    )
+                )
+
+                vals = {
+                    'name': name,
+                    'key': row['key'],
+                    'partner_id': row['partner_id'],
+                }
+
+                if (
+                    'description'
+                    in project_model._fields
+                ):
+                    vals['description'] = description
+
+                if (
+                    'date_start'
+                    in project_model._fields
+                ):
+                    vals['date_start'] = (
+                        row['start']
+                    )
+
+                if (
+                    'date'
+                    in project_model._fields
+                    and project_model._fields[
+                        'date'
+                    ].type == 'date'
+                ):
+                    vals['date'] = row['delivery']
+
+                elif (
+                    'date_deadline'
+                    in project_model._fields
+                ):
+                    vals['date_deadline'] = (
+                        row['delivery']
+                    )
+
+                status_name = (
+                    'Completo'
+                    if row['completed']
+                    else 'Pendiente'
+                )
+
+                if status_name in status_ids:
+                    vals['project_status'] = (
+                        status_ids[status_name]
+                    )
+
+                # ---------------------------------------------
+                # Crear proyecto real
+                # ---------------------------------------------
+
+                try:
+                    with self.env.cr.savepoint():
+                        project = (
+                            project_model.create(vals)
+                        )
+
+                        if project.key != row['key']:
+                            raise UserError(
+                                'La numeracion automatica '
+                                'ha cambiado la key %s por %s'
+                                % (
+                                    row['key'],
+                                    project.key,
+                                )
+                            )
+
+                    used_keys.add(row['key'])
+
+                    reason = (
+                        'IMPORTADO: proyecto ID %s'
+                        % project.id
+                    )
+
+                    counter = 'imported_count'
+
+                except Exception as exc:
+                    reason = (
+                        'ERROR DE CREACION: %s'
+                        % str(exc)[:350]
+                    )
+
+                    counter = 'failed_count'
+
+            # ---------------------------------------------
+            # Actualizar contadores y resultados
+            # ---------------------------------------------
+
+            counters[counter] += 1
+
+            row['result'] = reason
+
+            if counter != 'imported_count':
+                log += (
+                    label + ' | ' + reason + '\n'
+                )
+
+        # -----------------------------------------------------
+        # Guardar avance del lote
+        # -----------------------------------------------------
+
+        new_state = (
+            'done'
+            if end >= len(rows)
+            else 'importing'
+        )
+
+        self.write({
+            **counters,
+            'state': new_state,
+            'cursor': end,
+            'preview_data': json.dumps(
+                rows,
+                ensure_ascii=False,
+            ),
+            'preview': self._build_preview_page(
+                rows,
+                self.page,
+            ),
+            'summary': self._summary_html(
+                rows,
+                counters,
+                end,
+            ),
+            'import_log': log,
+            'issues': (
+                log
+                if log
+                else (
+                    'Sin omisiones ni errores '
+                    'de importacion.'
+                )
             ),
         })
 
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Validar proyectos OfiPro',
-            'res_model': self._name,
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'current',
-        }
+        return self._open_wizard()
