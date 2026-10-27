@@ -7,7 +7,6 @@ import re
 
 from collections import Counter, defaultdict
 from datetime import datetime
-from html import escape
 
 from odoo import fields, models, _
 from odoo.exceptions import UserError
@@ -21,26 +20,26 @@ class ServiflowOfiproImportWizard(models.TransientModel):
     _name = 'serviflow.ofipro.import.wizard'
     _description = 'Importacion historica de proyectos OfiPro'
 
+    batch_id = fields.Many2one(
+        'serviflow.ofipro.batch',
+        string='Lote de importacion',
+        readonly=True,
+    )
+
     file = fields.Binary(
         string='Archivo CSV',
         required=True,
         attachment=False,
     )
 
-    filename = fields.Char(
-        string='Nombre del archivo',
-    )
+    filename = fields.Char(string='Nombre del archivo')
 
-    state = fields.Selection(
-        [
-            ('draft', 'Sin analizar'),
-            ('validated', 'Validado'),
-            ('importing', 'Importacion en curso'),
-            ('done', 'Finalizado'),
-        ],
-        default='draft',
-        readonly=True,
-    )
+    state = fields.Selection([
+        ('draft', 'Sin analizar'),
+        ('validated', 'Validado'),
+        ('importing', 'Importacion en curso'),
+        ('done', 'Finalizado'),
+    ], default='draft', readonly=True)
 
     summary = fields.Html(
         string='Resumen',
@@ -58,71 +57,24 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         readonly=True,
     )
 
-    page = fields.Integer(
-        string='Pagina actual',
-        default=1,
-        readonly=True,
-    )
+    page = fields.Integer(default=1, readonly=True)
+    total_pages = fields.Integer(readonly=True)
+    total_rows = fields.Integer(readonly=True)
+    preview_data = fields.Text(readonly=True)
+    cursor = fields.Integer(default=0, readonly=True)
 
-    total_pages = fields.Integer(
-        string='Total de paginas',
-        readonly=True,
-    )
+    imported_count = fields.Integer(readonly=True)
+    missing_count = fields.Integer(readonly=True)
+    duplicate_count = fields.Integer(readonly=True)
+    invalid_count = fields.Integer(readonly=True)
+    existing_count = fields.Integer(readonly=True)
+    failed_count = fields.Integer(readonly=True)
 
-    total_rows = fields.Integer(
-        string='Total de registros',
-        readonly=True,
-    )
+    import_log = fields.Text(readonly=True)
 
-    preview_data = fields.Text(
-        string='Datos de validacion',
-        readonly=True,
-    )
-
-    cursor = fields.Integer(
-        string='Filas procesadas',
-        default=0,
-        readonly=True,
-    )
-
-    imported_count = fields.Integer(
-        string='Importados',
-        readonly=True,
-    )
-
-    missing_count = fields.Integer(
-        string='Sin cliente',
-        readonly=True,
-    )
-
-    duplicate_count = fields.Integer(
-        string='Cliente duplicado',
-        readonly=True,
-    )
-
-    invalid_count = fields.Integer(
-        string='Datos invalidos',
-        readonly=True,
-    )
-
-    existing_count = fields.Integer(
-        string='Key existente',
-        readonly=True,
-    )
-
-    failed_count = fields.Integer(
-        string='Errores de creacion',
-        readonly=True,
-    )
-
-    import_log = fields.Text(
-        string='Registro completo',
-        readonly=True,
-    )
-
-    # =========================================================
-    # LECTURA Y NORMALIZACION
-    # =========================================================
+    # =====================================================
+    # UTILIDADES
+    # =====================================================
 
     def _read_date(self, value):
         value = str(value or '').strip()
@@ -137,9 +89,7 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             '%Y-%m-%dT%H:%M:%S',
         ):
             try:
-                return datetime.strptime(
-                    value, fmt
-                ).date()
+                return datetime.strptime(value, fmt).date()
             except ValueError:
                 pass
 
@@ -159,28 +109,18 @@ class ServiflowOfiproImportWizard(models.TransientModel):
     def _read_csv(self):
         self.ensure_one()
 
-        if not self.file:
-            raise UserError(
-                _('Debes seleccionar un archivo CSV.')
-            )
-
-        if not (
+        if not self.file or not (
             self.filename or ''
         ).lower().endswith('.csv'):
             raise UserError(
-                _('El archivo debe tener extension .csv.')
+                _('Selecciona un archivo .csv.')
             )
 
-        try:
-            content = base64.b64decode(self.file)
-        except Exception as exc:
-            raise UserError(
-                _('No se ha podido decodificar el archivo.')
-            ) from exc
+        content = base64.b64decode(self.file)
 
         if len(content) > 20 * 1024 * 1024:
             raise UserError(
-                _('El CSV supera el limite de 20 MB.')
+                _('El CSV supera los 20 MB.')
             )
 
         try:
@@ -195,17 +135,15 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 sample,
                 delimiters=';,\t',
             ).delimiter
-
         except csv.Error:
-            first_line = (
+            first = (
                 text.splitlines()[0]
                 if text.splitlines()
                 else ''
             )
-
             delimiter = (
                 ';'
-                if first_line.count(';') >= first_line.count(',')
+                if first.count(';') >= first.count(',')
                 else ','
             )
 
@@ -220,8 +158,8 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             )
 
         reader.fieldnames = [
-            str(name or '').strip().upper()
-            for name in reader.fieldnames
+            str(x or '').strip().upper()
+            for x in reader.fieldnames
         ]
 
         required = (
@@ -236,9 +174,8 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         )
 
         missing = [
-            name
-            for name in required
-            if name not in reader.fieldnames
+            x for x in required
+            if x not in reader.fieldnames
         ]
 
         if missing:
@@ -250,19 +187,16 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         result = []
 
         try:
-            for line, values in enumerate(
-                reader, start=2
-            ):
+            for line, values in enumerate(reader, 2):
                 if None in values:
                     raise UserError(
-                        _(
-                            'Fila %s: separador CSV incorrecto.'
-                        ) % line
+                        _('Fila %s: separador CSV incorrecto.')
+                        % line
                     )
 
                 if not any(
-                    str(value or '').strip()
-                    for value in values.values()
+                    str(v or '').strip()
+                    for v in values.values()
                 ):
                     continue
 
@@ -271,23 +205,35 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         except csv.Error as exc:
             raise UserError(
                 _('Error leyendo CSV: %s')
-                % str(exc)
+                % exc
             ) from exc
 
         return result
 
-    # =========================================================
-    # VISTA PREVIA Y PAGINACION
-    # =========================================================
+    # =====================================================
+    # NAVEGACION
+    # =====================================================
+
+    def _open_wizard(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Importar proyectos historicos OfiPro',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
 
     def _build_preview_page(self, rows, page):
-        start = (page - 1) * PAGE_SIZE
-        end = page * PAGE_SIZE
-
         lines = [
             'Fila | Key | Pedido | Cliente | Inicio | '
             'Entrega | Estado | Resultado'
         ]
+
+        start = (page - 1) * PAGE_SIZE
+        end = page * PAGE_SIZE
 
         for row in rows[start:end]:
             errors = row.get('errors') or []
@@ -315,18 +261,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             )
 
         return '\n'.join(lines)
-
-    def _open_wizard(self):
-        self.ensure_one()
-
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Importar proyectos historicos OfiPro',
-            'res_model': self._name,
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'current',
-        }
 
     def _show_page(self, number):
         self.ensure_one()
@@ -360,9 +294,9 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         self.ensure_one()
         return self._show_page(self.page - 1)
 
-    # =========================================================
+    # =====================================================
     # RESUMEN
-    # =========================================================
+    # =====================================================
 
     def _summary_html(
         self, rows, counters=None, cursor=0
@@ -374,27 +308,17 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             for row in rows
         )
 
-        completed = sum(
-            row['completed']
-            for row in rows
-        )
-
         parts = [
             '<p><b>Proyectos analizados:</b> %s</p>'
             % len(rows),
-
             '<p><b>Validos inicialmente:</b> %s</p>'
             % (len(rows) - invalid),
-
             '<p><b>Con incidencias iniciales:</b> %s</p>'
             % invalid,
-
             '<p><b>Completos en CSV:</b> %s</p>'
-            % completed,
-
+            % sum(row['completed'] for row in rows),
             '<p><b>Pendientes en CSV:</b> %s</p>'
-            % (len(rows) - completed),
-
+            % sum(not row['completed'] for row in rows),
             '<p><b>Procesados:</b> %s / %s</p>'
             % (cursor, len(rows)),
         ]
@@ -402,32 +326,17 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         if cursor:
             labels = (
                 ('Importados', 'imported_count'),
-                ('Omitidos sin cliente', 'missing_count'),
-                (
-                    'Omitidos por cliente duplicado',
-                    'duplicate_count',
-                ),
-                (
-                    'Omitidos por datos invalidos',
-                    'invalid_count',
-                ),
-                (
-                    'Omitidos por key existente',
-                    'existing_count',
-                ),
-                (
-                    'Errores de creacion',
-                    'failed_count',
-                ),
+                ('Sin cliente', 'missing_count'),
+                ('Cliente duplicado', 'duplicate_count'),
+                ('Datos invalidos', 'invalid_count'),
+                ('Key existente', 'existing_count'),
+                ('Errores de creacion', 'failed_count'),
             )
 
             for label, key in labels:
                 parts.append(
                     '<p><b>%s:</b> %s</p>'
-                    % (
-                        escape(label),
-                        counters.get(key, 0),
-                    )
+                    % (label, counters.get(key, 0))
                 )
 
             skipped = sum(
@@ -451,9 +360,7 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         elif cursor:
             status = 'EN CURSO'
         else:
-            status = (
-                'Solo validacion; pendiente de importar'
-            )
+            status = 'PENDIENTE DE IMPORTAR'
 
         parts.append(
             '<p><b>Estado:</b> %s</p>'
@@ -462,19 +369,16 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
         return ''.join(parts)
 
-    # =========================================================
-    # VALIDAR CSV
-    # =========================================================
+    # =====================================================
+    # VALIDAR
+    # =====================================================
 
     def action_validate(self):
         self.ensure_one()
 
         if self.state != 'draft':
             raise UserError(
-                _(
-                    'Este asistente ya fue validado. '
-                    'Abre uno nuevo para analizar otro CSV.'
-                )
+                _('Este asistente ya fue validado.')
             )
 
         source = self._read_csv()
@@ -523,7 +427,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 errors.append(
                     'Codigo de pedido invalido'
                 )
-
             elif order in seen_orders:
                 errors.append(
                     'Pedido duplicado en CSV'
@@ -546,17 +449,14 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 '1', '1.0', 'true', 'si', 'sí'
             ):
                 completed = True
-
             elif firm in (
                 '0', '0.0', 'false', 'no'
             ):
                 completed = False
-
             else:
                 completed = False
                 errors.append(
-                    'FIRME invalido: %s'
-                    % firm
+                    'FIRME invalido: %s' % firm
                 )
 
             rows.append({
@@ -565,19 +465,15 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 'order': order,
                 'start': (
                     start.isoformat()
-                    if start
-                    else ''
+                    if start else ''
                 ),
                 'delivery': (
                     delivery.isoformat()
-                    if delivery
-                    else ''
+                    if delivery else ''
                 ),
                 'completed': completed,
                 'company': str(
-                    values.get(
-                        'A_CLIENTE__EMPRESA'
-                    ) or ''
+                    values.get('A_CLIENTE__EMPRESA') or ''
                 ).strip(),
                 'notes': str(
                     values.get('NOTAS') or ''
@@ -585,10 +481,7 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 'errors': errors,
             })
 
-        # -----------------------------------------------------
-        # Buscar clientes de Odoo por sequence_number
-        # Ejemplo: OfiPro 579 -> Odoo C00579
-        # -----------------------------------------------------
+        # Buscar clientes
 
         codes = {
             'C%s' % row['code'].zfill(5)
@@ -596,17 +489,11 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             if row['code'] is not None
         }
 
-        partners = (
-            self.env['res.partner']
-            .sudo()
-            .search([
-                (
-                    'sequence_number',
-                    'in',
-                    list(codes),
-                )
-            ])
-        )
+        partners = self.env[
+            'res.partner'
+        ].sudo().search([
+            ('sequence_number', 'in', list(codes))
+        ])
 
         by_code = defaultdict(list)
 
@@ -615,9 +502,7 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 partner.sequence_number
             ].append(partner.id)
 
-        # -----------------------------------------------------
-        # Calcular numeracion historica
-        # -----------------------------------------------------
+        # Calcular keys historicas
 
         sorted_rows = sorted(
             rows,
@@ -635,7 +520,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         for row in sorted_rows:
             if row['start']:
                 year = row['start'][:4]
-
                 years[year] += 1
 
                 row['key'] = '%05d/%s' % (
@@ -647,7 +531,7 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
             row['partner_code'] = (
                 'C%s' % row['code'].zfill(5)
-                if row['code']
+                if row['code'] is not None
                 else ''
             )
 
@@ -666,7 +550,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     'Cliente no encontrado: %s'
                     % row['partner_code']
                 )
-
             elif len(matches) > 1:
                 row['errors'].append(
                     'Cliente duplicado: %s (%s contactos)'
@@ -676,20 +559,13 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     )
                 )
 
-        # -----------------------------------------------------
-        # Comprobar keys existentes
-        # -----------------------------------------------------
-
-        project_model = (
-            self.env['project.project'].sudo()
-        )
+        project_model = self.env[
+            'project.project'
+        ].sudo()
 
         if 'key' not in project_model._fields:
             raise UserError(
-                _(
-                    'El modelo project.project no tiene '
-                    'campo key. Revisa el modulo de numeracion.'
-                )
+                _('No existe el campo key en proyectos.')
             )
 
         keys = [
@@ -711,31 +587,24 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     % row['key']
                 )
 
-        # -----------------------------------------------------
-        # Detalle de incidencias
-        # -----------------------------------------------------
-
-        issue_lines = []
-
-        for row in rows:
-            for error in row['errors']:
-                issue_lines.append(
-                    'Fila %s | Pedido %s | %s'
-                    % (
-                        row['line'],
-                        row['order'] or '-',
-                        error,
-                    )
-                )
+        issues = [
+            'Fila %s | Pedido %s | %s'
+            % (
+                row['line'],
+                row['order'] or '-',
+                error,
+            )
+            for row in rows
+            for error in row['errors']
+        ]
 
         self.write({
             'state': 'validated',
             'page': 1,
             'total_pages': max(
                 1,
-                (
-                    len(rows) + PAGE_SIZE - 1
-                ) // PAGE_SIZE,
+                (len(rows) + PAGE_SIZE - 1)
+                // PAGE_SIZE,
             ),
             'total_rows': len(rows),
             'preview_data': json.dumps(
@@ -746,8 +615,8 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 rows, 1
             ),
             'issues': (
-                '\n'.join(issue_lines)
-                if issue_lines
+                '\n'.join(issues)
+                if issues
                 else 'Sin incidencias.'
             ),
             'summary': self._summary_html(rows),
@@ -763,54 +632,89 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
         return self._open_wizard()
 
-    # =========================================================
-    # IMPORTACION REAL POR LOTES
-    # =========================================================
+    # =====================================================
+    # IMPORTAR 100 REGISTROS
+    # =====================================================
 
     def action_import_batch(self):
         self.ensure_one()
 
-        if (
-            self.state not in (
-                'validated',
-                'importing',
-            )
-            or not self.preview_data
-        ):
+        if self.state not in (
+            'validated', 'importing'
+        ) or not self.preview_data:
             raise UserError(
                 _('Primero debes validar el CSV.')
             )
 
-        rows = json.loads(
-            self.preview_data
+        self.env.cr.execute(
+            'SELECT pg_advisory_xact_lock(%s)',
+            (81736251,),
         )
+
+        self.invalidate_recordset()
+
+        if self.state not in ('validated', 'importing'):
+            raise UserError(
+                _('Esta importacion ya ha finalizado.')
+            )
+
+        rows = json.loads(self.preview_data)
 
         if self.cursor >= len(rows):
             raise UserError(
                 _('La importacion ya esta finalizada.')
             )
 
-        project_model = (
-            self.env['project.project'].sudo()
+        project_model = self.env[
+            'project.project'
+        ].sudo()
+
+        required_fields = (
+            'key',
+            'partner_id',
+            'ofipro_batch_id',
         )
 
-        if (
-            'key' not in project_model._fields
-            or 'partner_id' not in project_model._fields
-        ):
+        missing_fields = [
+            name for name in required_fields
+            if name not in project_model._fields
+        ]
+
+        if missing_fields:
             raise UserError(
-                _(
-                    'Faltan campos key o partner_id '
-                    'en project.project.'
-                )
+                _('Faltan campos en proyectos: %s')
+                % ', '.join(missing_fields)
             )
 
-        # Evitar ejecuciones simultaneas del importador.
+        # Crear lote permanente en la primera ejecucion
 
-        self.env.cr.execute(
-            'SELECT pg_advisory_xact_lock(%s)',
-            (81736251,),
-        )
+        batch_record = self.batch_id
+
+        if not batch_record:
+            batch_record = self.env[
+                'serviflow.ofipro.batch'
+            ].create({
+                'name': (
+                    'OfiPro - %s'
+                    % fields.Datetime.now().strftime(
+                        '%Y-%m-%d %H:%M:%S'
+                    )
+                ),
+                'filename': self.filename,
+            })
+
+            self.write({
+                'batch_id': batch_record.id
+            })
+
+        if batch_record.state != 'active':
+            raise UserError(
+                _(
+                    'Este lote ya fue revertido o tiene '
+                    'una reversion parcial. No puede '
+                    'continuar importandose.'
+                )
+            )
 
         counter_names = (
             'imported_count',
@@ -826,7 +730,9 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             for name in counter_names
         }
 
-        log = self.import_log or ''
+        log_lines = (
+            (self.import_log or '').splitlines()
+        )
 
         end = min(
             self.cursor + BATCH_SIZE,
@@ -834,10 +740,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         )
 
         batch = rows[self.cursor:end]
-
-        # -----------------------------------------------------
-        # Comprobar keys ocupadas
-        # -----------------------------------------------------
 
         keys = [
             row['key']
@@ -850,10 +752,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 ('key', 'in', keys)
             ]).mapped('key')
         )
-
-        # -----------------------------------------------------
-        # Comprobar clientes disponibles
-        # -----------------------------------------------------
 
         partner_ids = [
             row['partner_id']
@@ -869,10 +767,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             .ids
         )
 
-        # -----------------------------------------------------
-        # Buscar estados de proyecto
-        # -----------------------------------------------------
-
         status_ids = {}
 
         if (
@@ -880,26 +774,17 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             and 'project.status'
             in self.env.registry.models
         ):
-            status_model = (
-                self.env['project.status'].sudo()
-            )
+            status_model = self.env[
+                'project.status'
+            ].sudo()
 
-            for status_name in (
-                'Completo',
-                'Pendiente',
-            ):
+            for name in ('Completo', 'Pendiente'):
                 status = status_model.search([
-                    ('name', '=', status_name)
+                    ('name', '=', name)
                 ], limit=1)
 
                 if status:
-                    status_ids[
-                        status_name
-                    ] = status.id
-
-        # -----------------------------------------------------
-        # Procesar cada proyecto
-        # -----------------------------------------------------
+                    status_ids[name] = status.id
 
         for row in batch:
             label = (
@@ -912,15 +797,13 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 )
             )
 
-            errors = row.get('errors', [])
+            errors = row.get('errors') or []
 
             if any(
                 'Cliente duplicado:' in error
                 for error in errors
             ):
-                reason = (
-                    'OMITIDO: cliente duplicado'
-                )
+                reason = 'OMITIDO: cliente duplicado'
                 counter = 'duplicate_count'
 
             elif (
@@ -931,35 +814,24 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 or row.get('partner_id')
                 not in available_partners
             ):
-                reason = (
-                    'OMITIDO: cliente inexistente'
-                )
+                reason = 'OMITIDO: cliente inexistente'
                 counter = 'missing_count'
 
-            elif (
-                any(
-                    'Key ya existente:' in error
-                    for error in errors
-                )
-                or row['key'] in used_keys
+            elif errors and any(
+                'Key ya existente:' not in error
+                for error in errors
             ):
-                reason = (
-                    'OMITIDO: key ya existente'
-                )
-                counter = 'existing_count'
-
-            elif errors:
                 reason = (
                     'OMITIDO: '
                     + '; '.join(errors)
                 )
                 counter = 'invalid_count'
 
-            else:
-                # ---------------------------------------------
-                # Preparar nombre y descripcion
-                # ---------------------------------------------
+            elif row['key'] in used_keys:
+                reason = 'OMITIDO: key ya existente'
+                counter = 'existing_count'
 
+            else:
                 name = (
                     'OfiPro %s - %s'
                     % (
@@ -976,56 +848,38 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     'Fecha: %s\n'
                     'Entrega: %s\n'
                     'Estado original: %s\n\n%s'
-                    % (
-                        row['order'],
-                        row['partner_code'],
-                        row['start'],
-                        row['delivery'],
-                        (
-                            'Completo'
-                            if row['completed']
-                            else 'Pendiente'
-                        ),
-                        row['notes'],
-                    )
+                ) % (
+                    row['order'],
+                    row['partner_code'],
+                    row['start'],
+                    row['delivery'],
+                    'Completo'
+                    if row['completed']
+                    else 'Pendiente',
+                    row['notes'],
                 )
 
                 vals = {
                     'name': name,
                     'key': row['key'],
                     'partner_id': row['partner_id'],
+                    'ofipro_batch_id': batch_record.id,
                 }
 
-                if (
-                    'description'
-                    in project_model._fields
-                ):
+                if 'description' in project_model._fields:
                     vals['description'] = description
 
-                if (
-                    'date_start'
-                    in project_model._fields
-                ):
-                    vals['date_start'] = (
-                        row['start']
-                    )
+                if 'date_start' in project_model._fields:
+                    vals['date_start'] = row['start']
 
                 if (
-                    'date'
-                    in project_model._fields
-                    and project_model._fields[
-                        'date'
-                    ].type == 'date'
+                    'date' in project_model._fields
+                    and project_model._fields['date'].type
+                    == 'date'
                 ):
                     vals['date'] = row['delivery']
-
-                elif (
-                    'date_deadline'
-                    in project_model._fields
-                ):
-                    vals['date_deadline'] = (
-                        row['delivery']
-                    )
+                elif 'date_deadline' in project_model._fields:
+                    vals['date_deadline'] = row['delivery']
 
                 status_name = (
                     'Completo'
@@ -1038,15 +892,9 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                         status_ids[status_name]
                     )
 
-                # ---------------------------------------------
-                # Crear proyecto real
-                # ---------------------------------------------
-
                 try:
                     with self.env.cr.savepoint():
-                        project = (
-                            project_model.create(vals)
-                        )
+                        project = project_model.create(vals)
 
                         if project.key != row['key']:
                             raise UserError(
@@ -1064,7 +912,6 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                         'IMPORTADO: proyecto ID %s'
                         % project.id
                     )
-
                     counter = 'imported_count'
 
                 except Exception as exc:
@@ -1072,25 +919,19 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                         'ERROR DE CREACION: %s'
                         % str(exc)[:350]
                     )
-
                     counter = 'failed_count'
 
-            # ---------------------------------------------
-            # Actualizar contadores y resultados
-            # ---------------------------------------------
-
             counters[counter] += 1
-
             row['result'] = reason
 
             if counter != 'imported_count':
-                log += (
-                    label + ' | ' + reason + '\n'
+                log_lines.append(
+                    label + ' | ' + reason
                 )
 
-        # -----------------------------------------------------
-        # Guardar avance del lote
-        # -----------------------------------------------------
+        batch_record.write({
+            'imported_total': counters['imported_count'],
+        })
 
         new_state = (
             'done'
@@ -1107,22 +948,16 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                 ensure_ascii=False,
             ),
             'preview': self._build_preview_page(
-                rows,
-                self.page,
+                rows, self.page
             ),
             'summary': self._summary_html(
-                rows,
-                counters,
-                end,
+                rows, counters, end
             ),
-            'import_log': log,
+            'import_log': '\n'.join(log_lines),
             'issues': (
-                log
-                if log
-                else (
-                    'Sin omisiones ni errores '
-                    'de importacion.'
-                )
+                '\n'.join(log_lines)
+                if log_lines
+                else 'Sin omisiones ni errores.'
             ),
         })
 

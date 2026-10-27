@@ -6,3 +6,4 @@ from . import serviflow_reject_wizard
 from . import project_task
 from . import project_project
 from . import serviflow_ofipro_import_wizard
+from . import serviflow_ofipro_batch

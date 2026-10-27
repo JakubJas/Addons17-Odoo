@@ -4,6 +4,21 @@ from odoo.exceptions import UserError
 
 class ProjectProject(models.Model):
     _inherit = "project.project"
+    
+    
+    # =========================================================
+    # IMPORTACIONES HISTORICAS OFIPRO
+    # =========================================================
+
+    ofipro_batch_id = fields.Many2one(
+        'serviflow.ofipro.batch',
+        string='Lote de importacion OfiPro',
+        copy=False,
+        readonly=True,
+        index=True,
+        ondelete='set null',
+    )
+
 
     # =========================================================
     # SERVIFLOW / CRM

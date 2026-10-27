@@ -5,3 +5,4 @@ access_serviflow_reviewer_config_manager,serviflow.reviewer.config manager,model
 access_serviflow_request_budget_wizard,serviflow.request.budget.wizard,model_serviflow_request_budget_wizard,base.group_user,1,1,1,1
 access_serviflow_reject_wizard,serviflow.reject.wizard,model_serviflow_reject_wizard,base.group_user,1,1,1,1
 access_serviflow_ofipro_import_manager,serviflow.ofipro.import.wizard manager,model_serviflow_ofipro_import_wizard,sb_hr_serviflow.group_serviflow_manager,1,1,1,1
+access_serviflow_ofipro_batch_manager,serviflow.ofipro.batch manager,model_serviflow_ofipro_batch,sb_hr_serviflow.group_serviflow_manager,1,1,1,0

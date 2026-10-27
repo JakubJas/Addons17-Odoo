@@ -1,17 +1,12 @@
 
 <odoo>
 
-    <!-- ================================================ -->
-    <!-- VISTA DEL IMPORTADOR OFIPRO                      -->
-    <!-- ================================================ -->
+    <!-- IMPORTADOR OFIPRO -->
 
-    <record
-        id="view_serviflow_ofipro_import_form"
-        model="ir.ui.view"
-    >
+    <record id="view_serviflow_ofipro_import_form"
+            model="ir.ui.view">
 
         <field name="name">serviflow.ofipro.import.wizard.form</field>
-
         <field name="model">serviflow.ofipro.import.wizard</field>
 
         <field name="arch" type="xml">
@@ -33,7 +28,7 @@
                         string="Importar siguientes 100 registros"
                         type="object"
                         class="btn-primary"
-                        confirm="Se crearan proyectos reales en Odoo. Los registros sin cliente unico o con errores se omitiran. Continuar?"
+                        confirm="Se crearan proyectos reales en Odoo. Los registros invalidos se omitiran. Continuar?"
                         invisible="state != 'validated' and state != 'importing'"
                     />
 
@@ -46,8 +41,6 @@
                 </header>
 
                 <sheet>
-
-                    <!-- ARCHIVO CSV -->
 
                     <group>
 
@@ -63,25 +56,23 @@
                             invisible="1"
                         />
 
+                        <field
+                            name="batch_id"
+                            readonly="1"
+                            invisible="state == 'draft'"
+                        />
+
                     </group>
 
-                    <!-- INFORMACION -->
-
-                    <div
-                        class="alert alert-info"
-                        role="alert"
-                    >
+                    <div class="alert alert-info" role="alert">
                         Analiza el CSV antes de importar.
-                        La importacion se ejecuta por lotes
-                        de 100 registros, omite clientes
-                        inexistentes o duplicados y conserva
-                        la numeracion historica.
+                        La importacion se realiza por lotes
+                        de 100 registros.
 
-                        Pulsa el boton de importacion hasta
-                        que el estado sea Finalizado.
+                        Los proyectos creados quedan
+                        asociados a un lote para permitir
+                        su posterior reversion.
                     </div>
-
-                    <!-- RESUMEN -->
 
                     <group invisible="state == 'draft'">
 
@@ -94,47 +85,23 @@
 
                     </group>
 
-                    <!-- PESTAÑAS -->
-
                     <notebook invisible="state == 'draft'">
-
-                        <!-- VISTA PREVIA -->
 
                         <page string="Vista previa de proyectos">
 
                             <group>
 
                                 <group>
-
-                                    <field
-                                        name="page"
-                                        readonly="1"
-                                    />
-
-                                    <field
-                                        name="total_pages"
-                                        readonly="1"
-                                    />
-
+                                    <field name="page" readonly="1"/>
+                                    <field name="total_pages" readonly="1"/>
                                 </group>
 
                                 <group>
-
-                                    <field
-                                        name="total_rows"
-                                        readonly="1"
-                                    />
-
-                                    <field
-                                        name="cursor"
-                                        readonly="1"
-                                    />
-
+                                    <field name="total_rows" readonly="1"/>
+                                    <field name="cursor" readonly="1"/>
                                 </group>
 
                             </group>
-
-                            <!-- PAGINACION -->
 
                             <group>
 
@@ -169,8 +136,6 @@
 
                         </page>
 
-                        <!-- INCIDENCIAS -->
-
                         <page string="Omisiones e incidencias">
 
                             <field
@@ -183,42 +148,13 @@
 
                     </notebook>
 
-                    <!-- CAMPOS INTERNOS -->
-
-                    <field
-                        name="import_log"
-                        invisible="1"
-                    />
-
-                    <field
-                        name="imported_count"
-                        invisible="1"
-                    />
-
-                    <field
-                        name="missing_count"
-                        invisible="1"
-                    />
-
-                    <field
-                        name="duplicate_count"
-                        invisible="1"
-                    />
-
-                    <field
-                        name="invalid_count"
-                        invisible="1"
-                    />
-
-                    <field
-                        name="existing_count"
-                        invisible="1"
-                    />
-
-                    <field
-                        name="failed_count"
-                        invisible="1"
-                    />
+                    <field name="import_log" invisible="1"/>
+                    <field name="imported_count" invisible="1"/>
+                    <field name="missing_count" invisible="1"/>
+                    <field name="duplicate_count" invisible="1"/>
+                    <field name="invalid_count" invisible="1"/>
+                    <field name="existing_count" invisible="1"/>
+                    <field name="failed_count" invisible="1"/>
 
                 </sheet>
 
@@ -229,19 +165,13 @@
     </record>
 
 
-    <!-- ================================================ -->
-    <!-- ACCION                                          -->
-    <!-- ================================================ -->
+    <!-- ACCION DEL IMPORTADOR -->
 
-    <record
-        id="action_serviflow_ofipro_import"
-        model="ir.actions.act_window"
-    >
+    <record id="action_serviflow_ofipro_import"
+            model="ir.actions.act_window">
 
         <field name="name">Importar proyectos OfiPro</field>
-
         <field name="res_model">serviflow.ofipro.import.wizard</field>
-
         <field name="view_mode">form</field>
 
         <field
@@ -254,16 +184,139 @@
     </record>
 
 
-    <!-- ================================================ -->
-    <!-- MENU                                            -->
-    <!-- ================================================ -->
-
     <menuitem
         id="menu_serviflow_ofipro_import"
         name="Importar proyectos OfiPro"
         parent="menu_serviflow_root"
         action="action_serviflow_ofipro_import"
         sequence="40"
+        groups="sb_hr_serviflow.group_serviflow_manager"
+    />
+
+
+    <!-- LISTADO DE LOTES -->
+
+    <record id="view_serviflow_ofipro_batch_tree"
+            model="ir.ui.view">
+
+        <field name="name">serviflow.ofipro.batch.tree</field>
+        <field name="model">serviflow.ofipro.batch</field>
+
+        <field name="arch" type="xml">
+
+            <tree
+                string="Importaciones OfiPro"
+                create="false"
+                delete="false">
+
+                <field name="name"/>
+                <field name="filename"/>
+                <field name="user_id"/>
+                <field name="imported_total"/>
+                <field name="removed_total"/>
+                <field name="project_count"/>
+                <field name="state"/>
+
+            </tree>
+
+        </field>
+
+    </record>
+
+
+    <!-- FORMULARIO DEL LOTE -->
+
+    <record id="view_serviflow_ofipro_batch_form"
+            model="ir.ui.view">
+
+        <field name="name">serviflow.ofipro.batch.form</field>
+        <field name="model">serviflow.ofipro.batch</field>
+
+        <field name="arch" type="xml">
+
+            <form
+                string="Lote de importacion OfiPro"
+                create="false"
+                delete="false">
+
+                <header>
+
+                    <button
+                        name="action_open_projects"
+                        string="Ver proyectos"
+                        type="object"
+                        class="btn-secondary"
+                    />
+
+                    <button
+                        name="action_rollback"
+                        string="Revertir proyectos del lote"
+                        type="object"
+                        class="btn-danger"
+                        invisible="state == 'reverted' or project_count == 0"
+                        confirm="ATENCION: Se eliminaran permanentemente los proyectos de este lote que no tengan actividad vinculada. Esta accion no se puede deshacer. Continuar?"
+                    />
+
+                    <field
+                        name="state"
+                        widget="statusbar"
+                        statusbar_visible="active,partial,reverted"
+                    />
+
+                </header>
+
+                <sheet>
+
+                    <group>
+
+                        <field name="name" readonly="1"/>
+                        <field name="filename" readonly="1"/>
+                        <field name="user_id" readonly="1"/>
+                        <field name="imported_total" readonly="1"/>
+                        <field name="removed_total" readonly="1"/>
+                        <field name="project_count" readonly="1"/>
+
+                    </group>
+
+                    <group string="Resultado de la ultima reversion">
+
+                        <field
+                            name="rollback_log"
+                            nolabel="1"
+                            readonly="1"
+                        />
+
+                    </group>
+
+                </sheet>
+
+            </form>
+
+        </field>
+
+    </record>
+
+
+    <!-- ACCION DEL HISTORIAL -->
+
+    <record id="action_serviflow_ofipro_batches"
+            model="ir.actions.act_window">
+
+        <field name="name">Importaciones OfiPro</field>
+        <field name="res_model">serviflow.ofipro.batch</field>
+        <field name="view_mode">tree,form</field>
+
+    </record>
+
+
+    <!-- MENU DEL HISTORIAL -->
+
+    <menuitem
+        id="menu_serviflow_ofipro_batches"
+        name="Historial importaciones OfiPro"
+        parent="menu_serviflow_root"
+        action="action_serviflow_ofipro_batches"
+        sequence="41"
         groups="sb_hr_serviflow.group_serviflow_manager"
     />
 
