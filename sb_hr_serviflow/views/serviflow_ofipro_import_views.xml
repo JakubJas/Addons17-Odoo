@@ -248,13 +248,14 @@
                         class="btn-secondary"
                     />
 
+                    
                     <button
                         name="action_rollback"
-                        string="Revertir proyectos del lote"
+                        string="Eliminar siguientes 50 proyectos"
                         type="object"
                         class="btn-danger"
                         invisible="state == 'reverted' or project_count == 0"
-                        confirm="ATENCION: Se eliminaran permanentemente los proyectos de este lote que no tengan actividad vinculada. Esta accion no se puede deshacer. Continuar?"
+                        confirm="Se revisaran hasta 50 proyectos del lote y se eliminaran permanentemente los que no tengan relaciones protegidas. Esta accion no se puede deshacer. Continuar?"
                     />
 
                     <field
@@ -274,6 +275,7 @@
                         <field name="user_id" readonly="1"/>
                         <field name="imported_total" readonly="1"/>
                         <field name="removed_total" readonly="1"/>
+                        <field name="rollback_last_id" readonly="1"/>
                         <field name="project_count" readonly="1"/>
 
                     </group>

@@ -75,6 +75,68 @@ class ServiflowOfiproImportWizard(models.TransientModel):
     # =====================================================
     # UTILIDADES
     # =====================================================
+    
+    
+    
+    def _format_ofipro_notes(self, notes):
+        text = str(notes or '').strip()
+
+        if not text:
+            return ''
+
+        months = (
+            'enero|febrero|marzo|abril|mayo|junio|'
+            'julio|agosto|septiembre|setiembre|'
+            'octubre|noviembre|diciembre'
+        )
+
+        pattern = (
+            r'(?<!\w)'
+            r'(?:'
+            r'\d{1,2}\s*[/.-]\s*'
+            r'(?:\d{1,2}|' + months + r')'
+            r'\s*[/.-]\s*\d{4}'
+            r'|'
+            r'\d{4}-\d{1,2}-\d{1,2}'
+            r')'
+            r'(?!\w)'
+        )
+
+        matches = list(
+            re.finditer(
+                pattern,
+                text,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        if not matches:
+            return text
+
+        parts = []
+
+        # Conservar cualquier texto anterior
+        # a la primera fecha.
+        prefix = text[:matches[0].start()].strip()
+
+        if prefix:
+            parts.append(prefix)
+
+        for index, match in enumerate(matches):
+            start = match.start()
+
+            if index + 1 < len(matches):
+                end = matches[index + 1].start()
+            else:
+                end = len(text)
+
+            paragraph = text[start:end].strip()
+
+            if paragraph:
+                parts.append(paragraph)
+
+        return '\n\n'.join(parts)
+
 
     def _read_date(self, value):
         value = str(value or '').strip()
@@ -856,7 +918,9 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     'Completo'
                     if row['completed']
                     else 'Pendiente',
-                    row['notes'],
+                    self._format_ofipro_notes(
+                        row['notes']
+                    ),
                 )
 
                 vals = {
