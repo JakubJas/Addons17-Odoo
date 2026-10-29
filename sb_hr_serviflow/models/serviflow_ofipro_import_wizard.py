@@ -894,18 +894,22 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
                 try:
                     with self.env.cr.savepoint():
-                        project = project_model.create(vals)
+
+                        project = project_model.with_context(
+                            serviflow_ofipro_import=True
+                        ).create(vals)
+
+                        project.invalidate_recordset(['key'])
 
                         if project.key != row['key']:
                             raise UserError(
-                                'La numeracion automatica '
-                                'ha cambiado la key %s por %s'
+                                'La clave historica no se ha respetado. '
+                                'Esperada: %s. Generada: %s'
                                 % (
                                     row['key'],
                                     project.key,
                                 )
-                            )
-
+                            )               
                     used_keys.add(row['key'])
 
                     reason = (
