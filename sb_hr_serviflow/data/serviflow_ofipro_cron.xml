@@ -1,0 +1,15 @@
+
+<odoo>
+    <record id="ir_cron_serviflow_ofipro_jobs" model="ir.cron">
+        <field name="name">Serviflow - Procesar trabajos OfiPro</field>
+        <field name="model_id" ref="model_serviflow_ofipro_batch"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_process_ofipro()</field>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="numbercall">-1</field>
+        <field name="active">False</field>
+        <field name="doall">False</field>
+    </record>
+</odoo>

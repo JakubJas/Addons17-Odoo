@@ -10,7 +10,7 @@ from datetime import datetime
 
 from odoo import fields, models, _
 from odoo.exceptions import UserError
-
+from html import escape
 
 PAGE_SIZE = 40
 BATCH_SIZE = 100
@@ -71,6 +71,25 @@ class ServiflowOfiproImportWizard(models.TransientModel):
     failed_count = fields.Integer(readonly=True)
 
     import_log = fields.Text(readonly=True)
+    
+    
+    # Conservamos el asistente mientras se ejecuta
+    # el trabajo programado.
+    _transient_max_hours = 0
+
+    auto_import = fields.Boolean(
+        string='Importacion automatica',
+        default=False,
+        readonly=True,
+        copy=False,
+    )
+
+    background_error = fields.Text(
+        string='Error del proceso automatico',
+        readonly=True,
+        copy=False,
+    )
+
 
     # =====================================================
     # UTILIDADES
@@ -78,64 +97,89 @@ class ServiflowOfiproImportWizard(models.TransientModel):
     
     
     
-    def _format_ofipro_notes(self, notes):
+    
+    def _format_ofipro_notes(self, notes, html=True):
+        """
+        Separa las anotaciones historicas por fecha.
+
+        Ejemplos:
+            24/Diciembre/2025
+            25/diciembre/2025
+            24/12/2025
+            24-12-2025
+            2025-12-24
+
+        Conserva el contenido original.
+        """
+
         text = str(notes or '').strip()
 
         if not text:
             return ''
 
         months = (
-            'enero|febrero|marzo|abril|mayo|junio|'
-            'julio|agosto|septiembre|setiembre|'
-            'octubre|noviembre|diciembre'
+            r'enero|febrero|marzo|abril|mayo|junio|'
+            r'julio|agosto|septiembre|setiembre|'
+            r'octubre|noviembre|diciembre'
         )
 
-        pattern = (
-            r'(?<!\w)'
+        date_pattern = (
+            r'(?<![\w/])'
             r'(?:'
             r'\d{1,2}\s*[/.-]\s*'
-            r'(?:\d{1,2}|' + months + r')'
+            r'(?:\d{1,2}|(?:' + months + r'))'
             r'\s*[/.-]\s*\d{4}'
             r'|'
             r'\d{4}-\d{1,2}-\d{1,2}'
             r')'
-            r'(?!\w)'
+            r'(?![\w/])'
         )
 
         matches = list(
             re.finditer(
-                pattern,
+                date_pattern,
                 text,
                 flags=re.IGNORECASE,
             )
         )
 
-        if not matches:
-            return text
-
         parts = []
 
-        # Conservar cualquier texto anterior
-        # a la primera fecha.
-        prefix = text[:matches[0].start()].strip()
+        if matches:
 
-        if prefix:
-            parts.append(prefix)
+            prefix = text[
+                :matches[0].start()
+            ].strip()
 
-        for index, match in enumerate(matches):
-            start = match.start()
+            if prefix:
+                parts.append(prefix)
 
-            if index + 1 < len(matches):
-                end = matches[index + 1].start()
-            else:
-                end = len(text)
+            for index, match in enumerate(matches):
 
-            paragraph = text[start:end].strip()
+                start = match.start()
 
-            if paragraph:
-                parts.append(paragraph)
+                if index + 1 < len(matches):
+                    end = matches[index + 1].start()
+                else:
+                    end = len(text)
 
-        return '\n\n'.join(parts)
+                paragraph = text[start:end].strip()
+
+                if paragraph:
+                    parts.append(paragraph)
+
+        else:
+            parts.append(text)
+
+        if not html:
+            return '\n\n'.join(parts)
+
+        return ''.join(
+            '<p>%s</p>'
+            % escape(part).replace('\n', '<br/>')
+            for part in parts
+        )
+
 
 
     def _read_date(self, value):
@@ -566,30 +610,22 @@ class ServiflowOfiproImportWizard(models.TransientModel):
 
         # Calcular keys historicas
 
-        sorted_rows = sorted(
-            rows,
-            key=lambda row: (
-                row['start'] or '9999-12-31',
-                int(row['order'])
-                if row['order']
-                else 10**15,
-                row['line'],
-            ),
-        )
+        
+        # La KEY conserva el CODIGO original de OfiPro.
+        # El año procede de FECHA.
+        # Nunca se reinicia la numeracion por año.
 
-        years = Counter()
-
-        for row in sorted_rows:
-            if row['start']:
+        for row in rows:
+            if row['start'] and row['order']:
                 year = row['start'][:4]
-                years[year] += 1
 
                 row['key'] = '%05d/%s' % (
-                    years[year],
+                    int(row['order']),
                     year,
                 )
             else:
                 row['key'] = 'SIN FECHA'
+
 
             row['partner_code'] = (
                 'C%s' % row['code'].zfill(5)
@@ -903,25 +939,68 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     )
                 )[:250]
 
-                description = (
-                    'Importado desde OfiPro (historico).\n'
-                    'Pedido OfiPro: %s\n'
-                    'Cliente: %s\n'
-                    'Fecha: %s\n'
-                    'Entrega: %s\n'
-                    'Estado original: %s\n\n%s'
-                ) % (
-                    row['order'],
-                    row['partner_code'],
-                    row['start'],
-                    row['delivery'],
+    
+                status_text = (
                     'Completo'
                     if row['completed']
-                    else 'Pendiente',
-                    self._format_ofipro_notes(
-                        row['notes']
-                    ),
+                    else 'Pendiente'
                 )
+
+                description_field = (
+                    project_model._fields.get('description')
+                )
+
+                if (
+                    description_field
+                    and description_field.type == 'html'
+                ):
+
+                    description = (
+                        '<p>'
+                        '<b>Importado desde OfiPro (historico).</b>'
+                        '</p>'
+                        '<p>'
+                        '<b>Pedido OfiPro:</b> %s<br/>'
+                        '<b>Cliente:</b> %s<br/>'
+                        '<b>Fecha:</b> %s<br/>'
+                        '<b>Entrega:</b> %s<br/>'
+                        '<b>Estado original:</b> %s'
+                        '</p>'
+                        '<hr/>'
+                        '%s'
+                    ) % (
+                        escape(str(row['order'] or '')),
+                        escape(str(row['partner_code'] or '')),
+                        escape(str(row['start'] or '')),
+                        escape(str(row['delivery'] or '')),
+                        escape(status_text),
+                        self._format_ofipro_notes(
+                            row['notes'],
+                            html=True,
+                        ),
+                    )
+
+                else:
+
+                    description = (
+                        'Importado desde OfiPro (historico).\n'
+                        'Pedido OfiPro: %s\n'
+                        'Cliente: %s\n'
+                        'Fecha: %s\n'
+                        'Entrega: %s\n'
+                        'Estado original: %s\n\n%s'
+                    ) % (
+                        row['order'],
+                        row['partner_code'],
+                        row['start'],
+                        row['delivery'],
+                        status_text,
+                        self._format_ofipro_notes(
+                            row['notes'],
+                            html=False,
+                        ),
+                    )
+
 
                 vals = {
                     'name': name,
@@ -1030,3 +1109,69 @@ class ServiflowOfiproImportWizard(models.TransientModel):
         })
 
         return self._open_wizard()
+    
+    def action_start_auto_import(self):
+        self.ensure_one()
+
+        if not self.env.user.has_group(
+            'sb_hr_serviflow.group_serviflow_manager'
+        ):
+            raise UserError(
+                _('No tienes permisos para importar OfiPro.')
+            )
+
+        if self.state not in ('validated', 'importing'):
+            raise UserError(
+                _('Primero debes analizar y validar el CSV.')
+            )
+
+        if not self.preview_data:
+            raise UserError(
+                _('No existen datos validados para importar.')
+            )
+
+        batch_model = self.env[
+            'serviflow.ofipro.batch'
+        ].sudo()
+
+        if batch_model.search_count([
+            ('auto_rollback', '=', True),
+        ]):
+            raise UserError(
+                _('Hay una eliminacion OfiPro en curso.')
+            )
+
+        other_jobs = self.sudo().search_count([
+            ('id', '!=', self.id),
+            ('auto_import', '=', True),
+            ('state', 'in', ['validated', 'importing']),
+        ])
+
+        if other_jobs:
+            raise UserError(
+                _('Ya existe otra importacion automatica en curso.')
+            )
+
+        self.write({
+            'auto_import': True,
+            'background_error': False,
+        })
+
+        return self._open_wizard()
+
+    def action_stop_auto_import(self):
+        self.ensure_one()
+
+        if not self.env.user.has_group(
+            'sb_hr_serviflow.group_serviflow_manager'
+        ):
+            raise UserError(
+                _('No tienes permisos para detener OfiPro.')
+            )
+
+        self.write({
+            'auto_import': False,
+        })
+
+        return self._open_wizard()
+

@@ -22,15 +22,24 @@
                         class="btn-secondary"
                         invisible="state != 'draft'"
                     />
-
+  
                     <button
-                        name="action_import_batch"
-                        string="Importar siguientes 100 registros"
+                        name="action_start_auto_import"
+                        string="Iniciar importacion automatica"
                         type="object"
                         class="btn-primary"
-                        confirm="Se crearan proyectos reales en Odoo. Los registros invalidos se omitiran. Continuar?"
-                        invisible="state != 'validated' and state != 'importing'"
+                        confirm="Se iniciara la importacion automatica de los proyectos OfiPro. Continuar?"
+                        invisible="(state != 'validated' and state != 'importing') or auto_import"
                     />
+
+                    <button
+                        name="action_stop_auto_import"
+                        string="Detener importacion"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="not auto_import"
+                    />
+
 
                     <field
                         name="state"
@@ -41,6 +50,9 @@
                 </header>
 
                 <sheet>
+
+                    <field name="auto_import" invisible="1"/>
+                    <field name="background_error" invisible="1"/>
 
                     <group>
 
@@ -267,6 +279,9 @@
                 </header>
 
                 <sheet>
+
+                    <field name="auto_rollback" invisible="1"/>
+                    <field name="background_error" invisible="1"/>
 
                     <group>
 

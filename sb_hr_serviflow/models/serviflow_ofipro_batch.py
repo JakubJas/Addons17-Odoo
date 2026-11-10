@@ -55,6 +55,21 @@ class ServiflowOfiproBatch(models.Model):
     project_count = fields.Integer(
         compute='_compute_project_count',
     )
+    
+    
+    auto_rollback = fields.Boolean(
+        string='Eliminacion automatica activa',
+        default=False,
+        readonly=True,
+        copy=False,
+    )
+
+    background_error = fields.Text(
+        string='Error del proceso automatico',
+        readonly=True,
+        copy=False,
+    )
+
 
     @api.depends('project_ids')
     def _compute_project_count(self):
@@ -267,3 +282,198 @@ class ServiflowOfiproBatch(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+
+    def action_start_auto_rollback(self):
+        self.ensure_one()
+
+        if not self.env.user.has_group(
+            'sb_hr_serviflow.group_serviflow_manager'
+        ):
+            raise UserError(
+                _('No tienes permisos para eliminar OfiPro.')
+            )
+
+        if self.state == 'reverted':
+            raise UserError(
+                _('Este lote ya esta revertido.')
+            )
+
+        wizard_model = self.env[
+            'serviflow.ofipro.import.wizard'
+        ].sudo()
+
+        if wizard_model.search_count([
+            ('batch_id', '=', self.id),
+            ('auto_import', '=', True),
+        ]):
+            raise UserError(
+                _('Deten primero la importacion de este lote.')
+            )
+
+        if wizard_model.search_count([
+            ('batch_id', '=', self.id),
+            ('state', 'in', ['validated', 'importing']),
+        ]):
+            raise UserError(
+                _(
+                    'La importacion de este lote no ha '
+                    'finalizado. No se puede revertir todavia.'
+                )
+            )
+
+        if wizard_model.search_count([
+            ('auto_import', '=', True),
+        ]):
+            raise UserError(
+                _('Hay otra importacion automatica en curso.')
+            )
+
+        if self.env['serviflow.ofipro.batch'].sudo().search_count([
+            ('id', '!=', self.id),
+            ('auto_rollback', '=', True),
+        ]):
+            raise UserError(
+                _('Ya hay otra eliminacion automatica activa.')
+            )
+
+        self.write({
+            'auto_rollback': True,
+            'background_error': False,
+        })
+
+        return self._open_batch()
+
+    def action_stop_auto_rollback(self):
+        self.ensure_one()
+
+        if not self.env.user.has_group(
+            'sb_hr_serviflow.group_serviflow_manager'
+        ):
+            raise UserError(
+                _('No tienes permisos para detener la eliminacion.')
+            )
+
+        self.write({
+            'auto_rollback': False,
+        })
+
+        return self._open_batch()
+
+    @api.model
+    def _cron_process_ofipro(self):
+        """
+        Procesa trabajos OfiPro desde ir.cron.
+
+        Cada ejecucion avanza varios bloques.
+        El siguiente ciclo continua automaticamente.
+        """
+
+        self = self.sudo()
+
+        # Evitar ejecuciones simultaneas del planificador.
+        self.env.cr.execute(
+            'SELECT pg_try_advisory_xact_lock(%s)',
+            (81736252,),
+        )
+
+        locked = self.env.cr.fetchone()[0]
+
+        if not locked:
+            return
+
+        wizard_model = self.env[
+            'serviflow.ofipro.import.wizard'
+        ].sudo()
+
+        # IMPORTACIONES
+        wizard = wizard_model.search([
+            ('auto_import', '=', True),
+            ('state', 'in', ['validated', 'importing']),
+        ], order='id asc', limit=1)
+
+        if wizard:
+            try:
+                # Hasta 5 bloques de 100 registros.
+                with self.env.cr.savepoint():
+                    for _index in range(5):
+                        wizard.invalidate_recordset()
+
+                        if wizard.state == 'done':
+                            break
+
+                        wizard.with_user(
+                            wizard.create_uid
+                        ).action_import_batch()
+
+                    wizard.invalidate_recordset()
+
+                    if wizard.state == 'done':
+                        wizard.write({
+                            'auto_import': False,
+                        })
+
+            except Exception as exc:
+                wizard.write({
+                    'auto_import': False,
+                    'background_error': str(exc)[:2000],
+                })
+
+            return
+
+        # ELIMINACIONES
+        batch = self.search([
+            ('auto_rollback', '=', True),
+            ('state', '!=', 'reverted'),
+        ], order='id asc', limit=1)
+
+        if not batch:
+            return
+
+        try:
+            with self.env.cr.savepoint():
+
+                previous_id = batch.rollback_last_id
+
+                # Hasta 10 bloques de 50 proyectos.
+                for _index in range(10):
+                    batch.invalidate_recordset()
+
+                    if batch.state == 'reverted':
+                        break
+
+                    before = batch.rollback_last_id
+
+                    batch.with_user(
+                        batch.user_id
+                    ).action_rollback()
+
+                    batch.invalidate_recordset()
+
+                    if batch.rollback_last_id == before:
+                        break
+
+                batch.invalidate_recordset()
+
+                remaining = self.env[
+                    'project.project'
+                ].sudo().search_count([
+                    ('ofipro_batch_id', '=', batch.id),
+                ])
+
+                more_to_review = self.env[
+                    'project.project'
+                ].sudo().search_count([
+                    ('ofipro_batch_id', '=', batch.id),
+                    ('id', '>', batch.rollback_last_id),
+                ])
+
+                if not remaining or not more_to_review:
+                    batch.write({
+                        'auto_rollback': False,
+                    })
+
+        except Exception as exc:
+            batch.write({
+                'auto_rollback': False,
+                'background_error': str(exc)[:2000],
+            })

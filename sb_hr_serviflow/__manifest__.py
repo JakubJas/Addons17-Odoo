@@ -41,6 +41,8 @@
         'views/serviflow_ofipro_import_views.xml',
 
         'views/project_task_views.xml',
+        
+        'data/serviflow_ofipro_cron.xml',
     ],
 
     'assets': {
