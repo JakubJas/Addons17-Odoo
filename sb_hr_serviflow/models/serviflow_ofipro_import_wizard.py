@@ -1030,10 +1030,17 @@ class ServiflowOfiproImportWizard(models.TransientModel):
                     else 'Pendiente'
                 )
 
-                if status_name in status_ids:
-                    vals['project_status'] = (
-                        status_ids[status_name]
+                
+                if status_name not in status_ids:
+                    raise UserError(
+                        'No se ha encontrado el estado de proyecto '
+                        '"%s" en Odoo. Revisa la configuracion '
+                        'de estados antes de importar.'
+                        % status_name
                     )
+
+                vals['project_status'] = status_ids[status_name]
+
 
                 try:
                     with self.env.cr.savepoint():
