@@ -865,24 +865,40 @@ class ServiflowOfiproImportWizard(models.TransientModel):
             .ids
         )
 
+        
+        status_model = self.env['project.status'].sudo()
+
+        # Buscar los estados en todos los idiomas disponibles.
+        # No dependemos del idioma configurado en OdooBot.
+        statuses = status_model.with_context(lang=False).search([])
+
         status_ids = {}
 
-        if (
-            'project_status' in project_model._fields
-            and 'project.status'
-            in self.env.registry.models
-        ):
-            status_model = self.env[
-                'project.status'
-            ].sudo()
+        for status in statuses:
+            name = (status.name or '').strip().casefold()
 
-            for name in ('Completo', 'Pendiente'):
-                status = status_model.search([
-                    ('name', '=', name)
-                ], limit=1)
+            if name == 'pendiente':
+                status_ids['Pendiente'] = status.id
+            elif name == 'completo':
+                status_ids['Completo'] = status.id
 
-                if status:
-                    status_ids[name] = status.id
+        # Si los nombres originales no coinciden, comprobar
+        # sus traducciones al español.
+        if 'Pendiente' not in status_ids or 'Completo' not in status_ids:
+            for status in statuses.with_context(lang='es_ES'):
+                name = (status.name or '').strip().casefold()
+
+                if name == 'pendiente':
+                    status_ids['Pendiente'] = status.id
+                elif name == 'completo':
+                    status_ids['Completo'] = status.id
+
+        if 'Pendiente' not in status_ids or 'Completo' not in status_ids:
+            raise UserError(
+                'No se han encontrado los estados Pendiente y Completo '
+                'en project.status. Comprueba sus nombres y traducciones.'
+            )
+
 
         for row in batch:
             label = (
